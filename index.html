@@ -272,6 +272,8 @@ nav.side{max-height:calc(100vh - env(safe-area-inset-top,0px) - 86px);overflow-y
 #syncDot{width:8px;height:8px;border-radius:50%;background:transparent;margin-left:6px}#syncDot[data-on="1"]{background:#F2B74B;animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.3}}
 #whoName{color:#fff;font-weight:600}
 tr.click.on td{background:var(--accent-soft)}
+.chip.b-green{background:var(--ok-soft);color:var(--ok)}.chip.b-amber{background:var(--warn-soft);color:var(--warn)}.chip.b-red{background:var(--bad-soft);color:var(--bad)}
+.lvl.s-green i.f{background:var(--ok)}.lvl.s-amber i.f{background:var(--warn)}.lvl.s-red i.f{background:var(--bad)}
 .chip{display:inline-block;border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600;background:var(--surface-2);color:var(--muted)}.chip.ok{background:var(--ok-soft);color:var(--ok)}.chip.bad{background:var(--warn-soft);color:var(--warn)}
 </style>
 
@@ -343,7 +345,8 @@ const OTHERCRIT={
 function critForRole(regionId,role){
   const ov=typeof D!=="undefined"&&D&&D.criteria&&D.criteria[regionId+"|"+role]; if(ov&&ov.length) return ov.map(x=>[x[0],+x[1],+x[2]]);
   const d=ROLESK[role]; if(d){const sk=(d[regionId]||d.skills).filter(s=>!((d.drop||{})[regionId]||[]).includes(s));return libRole(REQ_LIB[LIBREG[regionId]]?.some(x=>x.role===d.lib)?regionId:"dubai",d.lib,sk)}
-  return OTHERCRIT[role]||null;
+  if(OTHERCRIT[role]) return OTHERCRIT[role];
+  const lib=typeof roleLib==="function"?roleLib(role):null; return lib?lib.map(x=>[x[0],x[1],x[2]]):null;
 }
 
 function seedData(){
@@ -430,7 +433,7 @@ function seedData(){
   const regions=[{id:"dubai",name:"UAE",gm:"khalid"},{id:"ksa",name:"Saudi Arabia",gm:"abdulrahman"},{id:"india",name:"India",gm:"vikram"},{id:"germany",name:"Germany",gm:"stefan"},{id:"kz",name:"Kazakhstan",gm:"aidar"}];
   return {v:8,now:START,seq:100,mseq:0,uid:0,
     settings:{tdEmail:"talent@tumodo.example",financeEmail:"finance@tumodo.example",pools:{cert:16000,train:28000},gmThreshold:1000,headStep:true,
-      remindDays:3,escalateDays:7,impactDays:90,bands:{Standout:105,Top:95,Strong:85,Core:75},reviewOn:true,rb:{green:90,amber:80},gmButtons:false},
+      remindDays:3,escalateDays:7,impactDays:90,bands:{Standout:105,Top:95,Strong:85,Core:75},reviewOn:true,rb:{green:85,amber:50},gmButtons:false},
     regions,
     depts:[{id:"commercial",name:"Commercial",head:"omar"},{id:"finance",name:"Finance",head:"mariam"},{id:"pc",name:"People & Culture",head:"sara"},
       {id:"marketing",name:"Marketing",head:"leila"},{id:"operations",name:"Operations",head:"elena"},{id:"leadership",name:"Leadership",head:"ceo"}],
@@ -521,6 +524,8 @@ const belowN=r=>Object.entries(r.scores).filter(([k,v])=>v<reqOf(r,k)).length;
 const avgOf=r=>{const v=Object.values(r.scores);return v.length?v.reduce((a,b)=>a+b,0)/v.length:0};
 const totOf=r=>Object.values(r.scores).reduce((a,b)=>a+b,0);
 const band=r=>{const a=att(r)*100,B=D.settings.rb;return a>=B.green?"green":a>=B.amber?"amber":"red"};
+const skillBand=(score,req)=>{if(score==null)return "none";const a=100*score/(req||EXPECT),B=D.settings.rb;return a>=B.green?"green":a>=B.amber?"amber":"red"};
+const skillChip=(score,req)=>`<span class="chip b-${skillBand(score,req)}">${score==null?"–":Math.min(100,Math.round(100*score/(req||EXPECT)))+"%"}</span>`;
 const bandLbl=()=>{const B=D.settings.rb;return {green:`${B.green}–100% of requirement`,amber:`${B.amber}–${B.green-1}% of requirement`,red:`Below ${B.amber}%: needs support`}};
 const recAction=b=>b==="green"?`Strong attainment (${D.settings.rb.green}%+): ready for stretch assignments and mentoring others.`:b==="amber"?"Close to requirement: targeted coaching on the highest-importance skills below the bar.":`Below ${D.settings.rb.amber}% of requirement: a structured development plan on the most important skills below the bar; review at the next 1:1 cycle.`;
 const recById=(cyc,id)=>(D.reviews[cyc]?.records||[]).find(r=>r.id===id);
@@ -559,7 +564,7 @@ function profile(p,cyc,force){
 function tierOf(m){const b=D.settings.bands;return m>=b.Standout?"Standout":m>=b.Top?"Top":m>=b.Strong?"Strong":m>=b.Core?"Core":"Underperforming"}
 const tierChip=pr=>pr?`<span class="tier t-${pr.tier}">${pr.tier}</span>`:`<span class="tier t-none">Not scored</span>`;
 const bandChip=r=>`<span class="chip b-${band(r)}">${Math.round(att(r)*100)}%</span>`;
-const lvl=(score,req)=>`<span class="lvl" aria-label="${score??"–"} of 5, needs ${req}">${[1,2,3,4,5].map(i=>`<i class="${score!=null&&i<=score?"f":""} ${i===req?"r":""}"></i>`).join("")}</span>`;
+const lvl=(score,req)=>`<span class="lvl s-${skillBand(score,req)}" aria-label="${score??"–"} of 5, needs ${req}">${[1,2,3,4,5].map(i=>`<i class="${score!=null&&i<=score?"f":""} ${i===req?"r":""}"></i>`).join("")}</span>`;
 
 /* growth plan shown to the person: skill names and friendly reasons, never numbers */
 function growthPlan(p){
@@ -1035,8 +1040,8 @@ function gapBarsSVG(sub){
 function profileBarsSVG(p){
   const items=Object.entries(p.scores), W=490, rh=30, pl=190, H=items.length*rh+26, X=v=>pl+(W-pl-24)*v/5; let s=svgOpen(W,H);
   items.forEach(([k,v],i)=>{const y=10+i*rh, rq=reqOf(p,k);
-    s+=`<text x="${pl-8}" y="${y+13}" text-anchor="end" font-size="11" fill="${CC.ink}">${esc(k)}</text><rect x="${pl}" y="${y}" width="${X(v)-pl}" height="17" rx="3" fill="${v>=rq?CC.green:CC.red}"/><line x1="${X(rq)}" y1="${y-3}" x2="${X(rq)}" y2="${y+20}" stroke="${CC.ink}" stroke-width="2.2"/><text x="${X(v)+6}" y="${y+13}" font-size="11" font-weight="700" fill="${CC.ink}">${v}/${rq}</text>`});
-  return s+`<text x="${pl}" y="${H-4}" font-size="9.5" fill="${CC.muted}">| = required level · green bar = meets it (3/3 is meeting, not lacking)</text></svg>`;
+    s+=`<text x="${pl-8}" y="${y+13}" text-anchor="end" font-size="11" fill="${CC.ink}">${esc(k)}</text><rect x="${pl}" y="${y}" width="${X(v)-pl}" height="17" rx="3" fill="${{green:CC.green,amber:CC.amber,red:CC.red}[skillBand(v,rq)]}"/><line x1="${X(rq)}" y1="${y-3}" x2="${X(rq)}" y2="${y+20}" stroke="${CC.ink}" stroke-width="2.2"/><text x="${X(v)+6}" y="${y+13}" font-size="11" font-weight="700" fill="${CC.ink}">${v}/${rq}</text>`});
+  return s+`<text x="${pl}" y="${H-4}" font-size="9.5" fill="${CC.muted}">| = required level · green ${D.settings.rb.green}%+ of it · amber ${D.settings.rb.amber}–${D.settings.rb.green-1}% · red below ${D.settings.rb.amber}%</text></svg>`;
 }
 const chart=svg=>`<div class="chartbox">${svg}</div>`;
 
@@ -1117,16 +1122,16 @@ function vUploads(){
     <li><b>Departments:</b> read from the filename (Individual&lt;Region&gt;_&lt;Department&gt;_Skills-Gap-Analysis.xlsx). You can correct region and department per file above.</li></ul></details>`;
 }
 function vCriteria(){
-  const mine=U.me===TD?null:isHeadOf(U.me);
-  const c=U.cr, recs=(D.reviews[c.cyc]?.records||[]).filter(r=>!mine||mine.includes(r.dept)), groups={};
+  const cs=U.me===TD?null:critScope(U.me), mine=cs?cs.depts:null;
+  const c=U.cr, recs=(D.reviews[c.cyc]?.records||[]).filter(r=>!cs||(cs.roles?cs.roles.has(r.region+"|"+r.role):mine.includes(r.dept))), groups={};
   recs.forEach(r=>{const k=r.dept+"|"+r.region+"|"+r.team;const g=groups[k]=groups[k]||{dept:r.dept,region:r.region,team:r.team,role:r.role,skills:{},n:0,src:r.src};g.n++;Object.keys(r.scores).forEach(s=>{if(!g.skills[s])g.skills[s]=[impOf(r,s),reqOf(r,s)]})});
   const byDept={}; Object.entries(groups).forEach(([k,g])=>(byDept[g.dept]=byDept[g.dept]||[]).push([k,g]));
-  return `<div class="pagehead"><div><span class="eyebrow">Talent Review${U.me===TD?" · Talent Development":""}</span><h1>Criteria</h1><p class="sub">What each role needs, per market and cycle: importance and required level for every skill. Changes recalculate everyone in that role straight away. Earlier cycles keep their own criteria.</p></div>
+  return `<div class="pagehead"><div><span class="eyebrow">Talent Review${U.me===TD?" · Talent Development":""}</span><h1>Criteria</h1><p class="sub">What each role needs, per market and cycle: weight (share of the score) and required level for every skill. Changes recalculate everyone in that role straight away. Earlier cycles keep their own criteria.</p></div>
     <div class="row">${sel("crCyc",cycWithData().map(x=>[x.id,x.name]),c.cyc,"Review cycle")}</div></div>
   ${Object.keys(byDept).length?Object.entries(byDept).map(([d,gs])=>`<section class="panel sec"><h2 style="font-size:20px">${esc(dept(d).name)}</h2>
     ${gs.sort((a,b)=>(region(a[1].region).name+a[1].team).localeCompare(region(b[1].region).name+b[1].team)).map(([k,g])=>`<details class="fold"><summary>${esc(region(g.region).name)} · ${esc(g.team)} <span class="meta">(${ppl(g.n)} · ${g.src==="file"?"from workbook":g.src==="library"?"from built-in library":"default level 4"})</span></summary><div class="scroll">
-      <table><thead><tr><th>Skill</th><th>Importance (1–5)</th><th>Required level (1–5)</th></tr></thead><tbody>${Object.entries(g.skills).map(([s,[im,rq]])=>`<tr><td>${esc(s)}</td>
-        <td><select data-crit="${esc(k)}|${esc(s)}|imp" aria-label="Importance of ${esc(s)}">${[1,2,3,4,5].map(v=>`<option ${v===im?"selected":""}>${v}</option>`).join("")}</select></td>
+      <table><thead><tr><th>Skill</th><th>Weight (1–10)</th><th>Share of score</th><th>Required level (1–5)</th></tr></thead><tbody>${Object.entries(g.skills).map(([s,[im,rq]])=>`<tr><td>${esc(s)}</td>
+        <td><select data-crit="${esc(k)}|${esc(s)}|imp" aria-label="Weight of ${esc(s)}">${[1,2,3,4,5,6,7,8,9,10].map(v=>`<option ${v===im?"selected":""}>${v}</option>`).join("")}</select></td><td class="num">${Math.round(100*im/Object.values(g.skills).reduce((a,x)=>a+x[0],0))}%</td>
         <td><select data-crit="${esc(k)}|${esc(s)}|req" aria-label="Required level of ${esc(s)}">${[1,2,3,4,5].map(v=>`<option ${v===rq?"selected":""}>${v}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></details>`).join("")}</section>`).join(""):emptyBox("No review data in this cycle yet.")}
   <section class="panel"><div class="head"><h2>Departments without criteria yet</h2></div><p class="sub">${D.depts.filter(d=>d.id!=="leadership"&&!byDept[d.id]).map(d=>esc(d.name)).join(", ")||"None"}. They join by loading their own scoring workbooks in Uploads, or by setting role criteria below. Until then their people still use Growth, with suggestions popular in their department.</p></section>${vRoleCrit()}`;
 }
@@ -1197,7 +1202,7 @@ function buildReport(spec){
   if(spec.kind==="person"){const p=person(spec.pid), st=stats([p.id]), pr=profile(p);
     return {title:"Individual development report",sub:`${p.name} · ${p.title} · ${dept(p.dept).name} · ${region(p.region).name} · ${pr?cycName(pr.cycle):cyc}`,file:`Person_${p.name.replace(/ /g,"-")}_${tag}`,
       kpis:[[pr?pr.match+"%":"–","Of role requirement"],[pr?pr.tier:"Not scored","Tier"],[st.n,"Requests"],[usd(st.invest),"Approved"],[st.done,"Completed"],[st.hours+"h","Learning time"]],
-      tables:[{title:"Skills against role requirements",head:["Skill","Importance","Required","Score","Status","Change"],rows:pr?pr.rows.map(r=>{const pv=pr.prev?.[r.skill];return [r.skill,r.imp,r.req,r.score,r.score>=r.req?"Meets":`Below by ${r.req-r.score}`,pv!=null?(r.score-pv>0?"+":"")+(r.score-pv):"–"]}):[]},
+      tables:[{title:"Skills against role requirements",head:["Skill","Importance","Required","Score","Status","Change"],rows:pr?pr.rows.map(r=>{const pv=pr.prev?.[r.skill];return [r.skill,r.imp,r.req,r.score,skillBand(r.score,r.req)==="green"?"Meets":skillBand(r.score,r.req)==="amber"?`Close (${Math.round(100*r.score/r.req)}%)`:`Below (${Math.round(100*r.score/r.req)}%)`,pv!=null?(r.score-pv>0?"+":"")+(r.score-pv):"–"]}):[]},
         {title:"Requests",head:["ID","Request","Provider","Status","Cost","Updated"],rows:reqRows(st.rs)},
         {title:"Development plan ("+({draft:"draft",shared:"shared",agreed:"agreed"}[planOf(p.id).status])+")",head:["Goal","Skill","Type","By","Status"],rows:planOf(p.id).goals.map(g=>[g.action,g.skill,g.type,g.due?fmtD(Date.parse(g.due)):"–",g.status])},
         {title:"Suggested next (shown to them without scores)",head:["Skill","Reason they see","Suggested course"],rows:growthPlan(p).map(x=>[x.skill,x.why,x.courses[0]?x.courses[0].title:"–"])}]}}
@@ -1833,7 +1838,7 @@ function openScoring(name,due){
   const prevId=latestCycleWithData(), id=nid("c","uid"), R={records:[],bamboo:{},uploads:[]}, skipped=[];
   const cy={id,name,state:"Current",phase:"scoring",date:iso(D.now),due,opened:D.now,calib:{},nudged:{}}; D.cycles.push(cy); D.reviews[id]=R;
   for(const p of active().filter(p=>p.mgr&&p.dept!=="leadership"&&p.id!==TD)){
-    const pr=recFor(p.id,prevId); let crit=pr&&pr.role===p.title?Object.keys(pr.scores).map(k=>[k,impOf(pr,k),reqOf(pr,k)]):critForRole(p.region,p.title);
+    const pr=recFor(p.id,prevId); let crit=critForRole(p.region,p.title)||(pr&&pr.role===p.title?Object.keys(pr.scores).map(k=>[k,impOf(pr,k),reqOf(pr,k)]):null);
     if(!crit||!crit.length){skipped.push(p);continue}
     const team=p.dept==="commercial"&&ROLESK[p.title]?ROLESK[p.title].tab+" Skills GAP Analysis":p.title;
     R.records.push({id:nid("r","uid"),pid:p.id,name:p.name,region:p.region,regionName:region(p.region).name,dept:p.dept,team,role:p.title,scores:{},draft:{},note:"",
@@ -1858,9 +1863,9 @@ function vScore(){
   return `<div class="pagehead"><div><span class="eyebrow">Talent Review · ${esc(c.name)}</span><h1>Score my team</h1><p class="sub">Score each skill 1–5. The required level for the role is marked; meeting it is a 3 when 3 is required. Due ${fmtD(Date.parse(c.due))}. Drafts save as you go.</p></div><div class="kpi" style="min-width:150px"><b>${done} of ${recs.length}</b><span>Submitted</span></div></div>
   <div class="stack">${recs.map(r=>{const prev=recFor(r.pid,prevId), sub=r.status==="submitted", sk=Object.keys(r.req), filled=sk.filter(k=>(sub?r.scores:r.draft)[k]!=null).length;
     return `<section class="panel"><div class="head"><div><h2 style="font-size:19px">${esc(r.name)}</h2><span class="meta">${esc(r.role)} · ${esc(r.regionName)}</span></div><span class="pill ${sub?"p-ok":filled?"p-go":"p-wait"}">${sub?"Submitted":filled?`${filled} of ${sk.length} scored`:"Not started"}</span></div>
-    <div class="scroll"><table><thead><tr><th>Skill</th><th class="num">Required</th><th class="num">Importance</th><th>Last cycle</th><th>Score</th></tr></thead><tbody>
+    <div class="scroll"><table><thead><tr><th>Skill</th><th class="num">Required</th><th class="num">Weight</th><th>Last cycle</th><th>Score</th><th>Level</th></tr></thead><tbody>
     ${sk.map(k=>{const v=(sub?r.scores:r.draft)[k], pv=prev?prev.scores[Object.keys(prev.scores).find(x=>sameSkill(x,k))]:null;return `<tr><td>${esc(k)}</td><td class="num">${reqOf(r,k)}</td><td class="num">${impOf(r,k)}</td><td>${pv!=null?pv:'<span class="meta">–</span>'}</td>
-      <td><div class="scope" role="group" aria-label="Score for ${esc(k)}">${[1,2,3,4,5].map(x=>`<button type="button" ${sub?"disabled":""} data-sc="${r.id}|${esc(k)}|${x}" aria-pressed="${v===x}">${x}</button>`).join("")}</div></td></tr>`}).join("")}</tbody></table></div>
+      <td><div class="scope" role="group" aria-label="Score for ${esc(k)}">${[1,2,3,4,5].map(x=>`<button type="button" ${sub?"disabled":""} data-sc="${r.id}|${esc(k)}|${x}" aria-pressed="${v===x}">${x}</button>`).join("")}</div></td><td>${skillChip(v,reqOf(r,k))}</td></tr>`}).join("")}</tbody></table></div>
     <div class="field" style="margin-top:10px"><label for="sn_${r.id}">Note for calibration (optional, not shown to ${esc(r.name.split(" ")[0])})</label><input id="sn_${r.id}" data-snote="${r.id}" value="${esc(r.note||"")}" ${sub?"disabled":""}></div>
     <div class="row" style="margin-top:10px">${sub?`<span class="sub">Submitted ${fmtD(r.scoredAt)}.</span><button class="btn sm" data-do="unsubmit" data-id="${r.id}">Reopen</button>`:`<button class="btn primary sm" data-do="submitscore" data-id="${r.id}" ${filled<sk.length?"disabled":""}>Submit ${esc(r.name.split(" ")[0])}'s scores</button>${filled<sk.length?`<span class="sub">${sk.length-filled} skill(s) left</span>`:""}`}</div></section>`}).join("")||emptyBox("No one to score in this cycle.")}</div>`;
 }
@@ -1901,7 +1906,7 @@ const canReview=id=>id===TD||(scopesOf(id).length>0&&D.settings.reviewOn);
 function navItems(){
   const me=U.me, items=[], unread=D.mails.filter(m=>m.to===me&&!m.read).length;
   if(U.ws==="review"){
-    const headCrit=me!==TD&&isHeadOf(me).length?[["criteria","Criteria"]]:[];
+    const headCrit=me!==TD&&critScope(me)?[["criteria","Criteria"]]:[];
     const lc=liveCyc(), toScore=lc&&lc.phase==="scoring"?D.reviews[lc.id].records.filter(r=>r.src==="platform"&&r.mgr===me):[];
     if(me===TD) items.push(["Talent Review",[["review","Review report"],["uploads","Cycles & uploads",lc?.phase==="scoring"?scoringProgress(lc).n-scoringProgress(lc).done:0],...(lc?.phase==="calibration"?[["calib","Calibration"]]:[]),["criteria","Criteria"]]]);
     else items.push(["Talent Review",[["review",isLeader(me)?"Review":"Team review"],...(toScore.length?[["score","Score my team",toScore.filter(r=>r.status!=="submitted").length]]:[]),...(lc?.phase==="calibration"&&calibDepts(me).length?[["calib","Calibration",calibDepts(me).filter(d=>!lc.calib[d]).length]]:[]),...headCrit]]);
@@ -2182,7 +2187,7 @@ document.addEventListener("drop",e=>{const z=e.target.closest(".drop");if(!z)ret
 /* start: see boot() */
 
 /* ============================== configuration ============================== */
-const GH_CONFIG={clientId:"8176bed7-18a7-4e52-aaa3-fb92e3d78e5a",tenant:"066fca4a-34f4-4291-9756-e551b09b3077",siteHost:"mytumodo.sharepoint.com",sitePath:"/sites/HR"};
+const GH_CONFIG={clientId:"8176bed7-18a7-4e52-aaa3-fb92e3d78e5a",tenant:"066fca4a-34f4-4291-9756-e551b09b3077",siteHost:"mytumodo-my.sharepoint.com",sitePath:"/personal/mohammad_sh_tumodo_io",siteId:"mytumodo-my.sharepoint.com,0dc85902-371a-466a-b617-b9cf6b39948f,131954da-06ba-450e-b3a9-b9e92eccc517",lists:{"GH Store": "cba2a3ad-16e9-4214-8b55-b2e43caa3fbc", "GH Store Private": "b8b73c0b-0315-4bf9-b05c-f36125e65ed6", "GH Mail": "d60e1574-2a08-482d-9e9a-8cc08d963a62"}};
 
 /* ============================== Microsoft sign-in (OAuth 2.0 authorization code + PKCE, no library) ============================== */
 const Auth={
@@ -2258,6 +2263,8 @@ const SP={
   },
   async resolveSite(){
     if(SP.sid) return SP.sid;
+    // Pinned ids (set at build time) need no lookup: people with access to the lists alone can still use the hub.
+    if(GH_CONFIG.siteId&&GH_CONFIG.lists&&Object.keys(GH_CONFIG.lists).length){ SP.sid=GH_CONFIG.siteId; SP.lid={...GH_CONFIG.lists}; return SP.sid; }
     const s=await SP.graph(`/sites/${GH_CONFIG.siteHost}:${GH_CONFIG.sitePath}?$select=id`); SP.sid=s.id;
     const ls=await SP.graph(`/sites/${SP.sid}/lists?$select=id,displayName&$top=500`); SP.lid={}; for(const l of ls.value||[]) SP.lid[l.displayName]=l.id; return SP.sid;
   },
@@ -2336,7 +2343,7 @@ const SP={
     SP.lastSync=Date.now(); SP.empty=!rows.pub.length; return SP.assemble(rows);
   },
   async modified(){ // cheap change check: each list's last modified time
-    const out={}; try{ const ls=await SP.graph(`/sites/${SP.sid}/lists?$select=id,displayName,lastModifiedDateTime&$top=500`); for(const l of ls.value||[]) out[l.displayName]=l.lastModifiedDateTime; }catch(e){} return out;
+    const out={}; await Promise.all(Object.values(SP.L).map(async t=>{ const id=SP.lid[t]; if(!id) return; try{ const l=await SP.graph(`/sites/${SP.sid}/lists/${id}?$select=lastModifiedDateTime`); out[t]=l.lastModifiedDateTime; }catch(e){} })); return out;
   },
   /* ---------- writes ---------- */
   onSave(){ if(SP.mode!=="prod"||!SP.ready||SP.readOnly) return; clearTimeout(SP._t); SP._t=setTimeout(()=>SP.flush(),400); },
@@ -2439,32 +2446,142 @@ function importPack(pack){
   return n;
 }
 
+/* ---------- built-in role criteria for every Tumodo role (Commercial model applied company-wide) ----------
+   [skill, weight 1-5, required level 1-5]. Department heads and managers can adjust weights, levels and
+   skills per market in Talent review → Criteria; those edits override this library. */
+const ROLE_LIB={
+/* Commercial (roles not already covered by the Talent Review Hub library) */
+"Chief Commercial Officer":[["Commercial Strategy",5,5],["Revenue Forecasting & Planning",5,5],["Sales Team Leadership",5,5],["Partner & Channel Development",4,4],["Pricing & Deal Governance",4,4],["Executive Communication",4,5],["Market Awareness",4,4],["Cross-functional Collaboration",3,4],["Coaching & Development",3,4],["Product Knowledge",3,4]],
+"Head of GCC":[["Regional Sales Strategy",5,5],["Pipeline Management",5,5],["Sales Team Leadership",5,5],["Sales Forecasting and Reporting",4,4],["Key Account Growth",4,4],["Negotiation",4,4],["Executive Communication",3,4],["Coaching & Development",4,4],["Market Awareness",3,4],["Product Knowledge",3,4]],
+"Head of DACH":[["Regional Sales Strategy",5,5],["Pipeline Management",5,5],["Sales Team Leadership",5,5],["Sales Forecasting and Reporting",4,4],["Key Account Growth",4,4],["Negotiation",4,4],["Executive Communication",3,4],["Coaching & Development",4,4],["Market Awareness",3,4],["Product Knowledge",3,4]],
+"Head of Sales Development":[["Outreach Strategy",5,5],["SDR Performance Management",5,5],["Lead Qualification Standards",4,4],["Reporting",4,4],["Process Optimization",4,4],["Coaching",5,4],["Leadership",4,4],["Analytical Thinking",3,4],["Communication",3,4],["Product Knowledge",3,3]],
+"GCC SDR Team Lead":[["SDR Performance Management",5,4],["Coaching",5,4],["Outreach Strategy",4,4],["Lead Qualification",4,4],["CRM Management",4,4],["Reporting",3,3],["Motivation",4,4],["Communication",3,4],["Accountability",4,4],["Product Knowledge",3,3]],
+"Sales Team Leader":[["Pipeline Management",5,4],["Deal Closing",5,4],["Coaching & Development",5,4],["Sales Forecasting and Reporting",4,4],["Negotiation",4,4],["CRM Management",3,4],["Relationship Building",3,4],["Accountability",4,4],["Communication",3,4],["Product Knowledge",3,4]],
+"Sales Manager":[["Pipeline Management",5,4],["Deal Closing",5,4],["Account Planning",4,4],["Negotiation",5,4],["Sales Forecasting and Reporting",4,4],["Commercial Proposal Design",3,4],["Relationship Building",4,4],["Executive Communication",3,3],["Ownership",4,4],["Product Knowledge",3,4]],
+"Senior Sales Manager":[["Enterprise Deal Management",5,5],["Account Planning",5,4],["Forecasting",4,4],["Commercial Proposal Design",4,4],["Negotiation",5,5],["Strategic Thinking",4,4],["Executive Communication",4,4],["Influence",3,4],["Ownership",4,4],["Product Knowledge",3,4]],
+"Account Manager":[["Renewal Management",5,4],["Expansion Selling",4,3],["Client Reporting",4,4],["Escalation Handling",4,4],["Stakeholder Mapping",3,3],["Consultative Selling",4,3],["Relationship Management",5,4],["Clear Communication",4,4],["Patience",3,4],["Product Knowledge",4,4]],
+"Senior Account Manager":[["Renewal Management",5,5],["Expansion Selling",5,4],["Client Reporting",4,4],["Escalation Handling",4,4],["Stakeholder Mapping",4,4],["Consultative Selling",4,4],["Relationship Management",5,5],["Negotiation",4,4],["Clear Communication",4,4],["Product Knowledge",4,4]],
+"Senior Key Account Manager":[["Renewal Management",5,5],["Expansion Selling",5,5],["Client Reporting",4,4],["Escalation Handling",4,4],["Stakeholder Mapping",5,4],["Consultative Selling",5,4],["Relationship Management",5,5],["Negotiation",4,4],["Executive Communication",3,4],["Product Knowledge",4,4]],
+"Key Account Manager Team Lead":[["Portfolio Growth Planning",5,5],["Renewal Management",5,4],["Expansion Selling",4,4],["Escalation Handling",4,4],["Coaching & Development",5,4],["Client Reporting",3,4],["Relationship Management",5,5],["Negotiation",4,4],["Leadership",4,4],["Product Knowledge",4,4]],
+"Lead Development Representative":[["Lead Qualification",5,4],["Cold Outreach",4,3],["CRM Updating",4,4],["Appointment Setting",4,3],["Market Research",3,3],["Persistence",4,4],["Curiosity",3,3],["Clear Communication",4,4],["Discipline",3,4],["Product Knowledge",3,3]],
+"Junior Sales Development Representative":[["Cold Outreach",5,3],["Lead Qualification",4,3],["CRM Updating",4,3],["Appointment Setting",4,3],["Market Research",3,2],["Persistence",4,3],["Curiosity",3,3],["Clear Communication",4,3],["Discipline",3,3],["Product Knowledge",3,2]],
+"Senior Sales Development Representative":[["Cold Outreach",5,4],["Lead Qualification",5,4],["CRM Updating",4,4],["Appointment Setting",4,4],["Market Research",3,4],["Persistence",4,4],["Mentoring Junior SDRs",3,3],["Clear Communication",4,4],["Discipline",3,4],["Product Knowledge",3,4]],
+"Sales Operations Manager":[["Sales Process Design",5,5],["CRM Administration",5,4],["Sales Reporting & Dashboards",5,4],["Forecast Accuracy",4,4],["Territory & Quota Planning",4,4],["Data Analysis",4,4],["Project Management",3,4],["Cross-functional Collaboration",4,4],["Attention to detail",3,4],["Product Knowledge",2,3]],
+"Sales Operations Specialist":[["CRM Administration",5,4],["Sales Reporting & Dashboards",5,3],["Data Analysis",4,3],["Sales Process Support",4,3],["Order & Contract Handling",3,3],["Attention to detail",4,4],["Time Management",3,3],["Clear Communication",3,3],["Problem Solving",3,3],["Product Knowledge",2,3]],
+"Supply Relationships Manager":[["Supplier Relationship Management",5,5],["Contract Negotiation",5,4],["Rate & Inventory Optimisation",4,4],["Supplier Performance Review",4,4],["Market Awareness",3,4],["Data Analysis",3,3],["Relationship Building",4,4],["Clear Communication",3,4],["Ownership",4,4],["Product Knowledge",3,4]],
+"Global Product & Intergrations Manager":[["Product Roadmap Management",5,5],["Integration & API Knowledge",5,4],["Requirements Gathering",4,4],["Stakeholder Management",4,4],["Data Analysis",3,4],["Project Management",4,4],["Commercial Awareness",3,4],["Cross-functional Collaboration",4,4],["Clear Communication",4,4],["Product Knowledge",5,5]],
+"Back-end Development Team Lead":[["System Architecture",5,5],["Code Quality & Review",5,4],["API Design",4,4],["Database Design",4,4],["Security Practices",4,4],["Delivery Planning",4,4],["Technical Leadership",5,4],["Coaching & Development",4,4],["Clear Communication",3,4],["Product Knowledge",3,4]],
+/* Customer Support */
+"Chief Operating Officer":[["Operations Strategy",5,5],["Service Quality Management",5,5],["Process Improvement",4,5],["Budget & Cost Control",4,4],["Leadership",5,5],["Data-driven Decision Making",4,4],["Supplier & Partner Management",3,4],["Executive Communication",4,5],["Change Management",4,4],["Product Knowledge",3,4]],
+"Head of Customer Support":[["Service Quality Management",5,5],["Workforce Planning & Scheduling",4,4],["Escalation Handling",4,5],["Process Improvement",4,4],["Reporting & KPIs",4,4],["Leadership",5,5],["Coaching & Development",4,4],["Customer Empathy",4,4],["Clear Communication",4,4],["Product Knowledge",4,5]],
+"Deputy Head of Customer Support":[["Service Quality Management",5,4],["Workforce Planning & Scheduling",4,4],["Escalation Handling",5,4],["Process Improvement",4,4],["Reporting & KPIs",4,4],["Leadership",4,4],["Coaching & Development",4,4],["Customer Empathy",4,4],["Clear Communication",4,4],["Product Knowledge",4,4]],
+"Customer Support Lead":[["Escalation Handling",5,4],["Team Scheduling",4,4],["Quality Monitoring",4,4],["Booking Systems (GDS)",4,4],["Coaching",5,4],["Reporting & KPIs",3,3],["Customer Empathy",4,4],["Clear Communication",4,4],["Decision Making under Pressure",4,4],["Product Knowledge",4,4]],
+"Customer Support Team Lead":[["Escalation Handling",5,4],["Team Scheduling",4,4],["Quality Monitoring",4,4],["Booking Systems (GDS)",4,4],["Coaching",5,4],["Reporting & KPIs",3,3],["Customer Empathy",4,4],["Clear Communication",4,4],["Decision Making under Pressure",4,4],["Product Knowledge",4,4]],
+"Customer Support Supervisor":[["Escalation Handling",5,4],["Shift Coordination",4,4],["Quality Monitoring",4,3],["Booking Systems (GDS)",4,4],["Coaching",4,3],["Reporting & KPIs",3,3],["Customer Empathy",4,4],["Clear Communication",4,4],["Decision Making under Pressure",4,4],["Product Knowledge",4,4]],
+"Quality Control & Training Manager":[["Quality Framework Design",5,5],["Call & Case Auditing",5,4],["Training Design & Delivery",5,4],["Coaching",4,4],["Reporting & KPIs",4,4],["Process Documentation",4,4],["Customer Empathy",3,4],["Clear Communication",4,4],["Attention to detail",4,4],["Product Knowledge",4,5]],
+"Travel Consultant":[["Booking Systems (GDS)",5,4],["Fare Rules & Ticketing",5,4],["Itinerary Changes & Refunds",4,4],["Customer Empathy",4,4],["Problem Solving",4,4],["Accuracy & Attention to detail",4,4],["Time Management",3,4],["Clear Communication",4,4],["Resilience",3,3],["Product Knowledge",4,4]],
+"Junior Travel Consultant":[["Booking Systems (GDS)",5,3],["Fare Rules & Ticketing",5,3],["Itinerary Changes & Refunds",4,3],["Customer Empathy",4,3],["Problem Solving",3,3],["Accuracy & Attention to detail",4,3],["Time Management",3,3],["Clear Communication",4,3],["Resilience",3,3],["Product Knowledge",4,3]],
+"Senior Travel Consultant":[["Booking Systems (GDS)",5,5],["Fare Rules & Ticketing",5,5],["Itinerary Changes & Refunds",4,4],["Complex Itinerary Handling",4,4],["Customer Empathy",4,4],["Problem Solving",4,4],["Mentoring Consultants",3,3],["Clear Communication",4,4],["Accuracy & Attention to detail",4,4],["Product Knowledge",4,5]],
+"Travel Agent":[["Booking Systems (GDS)",5,4],["Fare Rules & Ticketing",5,4],["Itinerary Changes & Refunds",4,4],["Customer Empathy",4,4],["Problem Solving",4,4],["Accuracy & Attention to detail",4,4],["Time Management",3,4],["Clear Communication",4,4],["Resilience",3,3],["Product Knowledge",4,4]],
+/* Finance */
+"Chief Financial Officer":[["Financial Strategy & Planning",5,5],["Financial reporting",5,5],["Treasury & Cash Management",4,5],["Tax & Compliance Oversight",4,4],["Budgeting & Forecasting",5,5],["Leadership",5,5],["Executive Communication",4,5],["Risk Management",4,4],["Data analysis",3,4],["Business Partnering",4,4]],
+"Group Controller":[["Financial reporting",5,5],["Consolidation & Group Accounting",5,5],["Internal Controls",5,4],["IFRS Knowledge",4,5],["Audit Management",4,4],["ERP systems",3,4],["Leadership",4,4],["Attention to detail",4,5],["Clear Communication",3,4],["Data analysis",3,4]],
+"Head of Financial Forecast and Analytics":[["Financial modelling",5,5],["Budgeting & Forecasting",5,5],["Data analysis",5,5],["Business Partnering",4,4],["Presentation skills",4,4],["ERP & BI Tools",4,4],["Strategic Thinking",4,4],["Leadership",3,4],["Attention to detail",3,4],["Clear Communication",4,4]],
+"Finance Manager":[["Financial reporting",5,5],["Financial modelling",4,4],["Budgeting & Forecasting",4,4],["Internal Controls",4,4],["ERP systems",3,4],["Leadership",4,4],["Data analysis",3,3],["Business Partnering",3,4],["Attention to detail",4,4],["Clear Communication",3,4]],
+"Chief Accountant":[["Financial reporting",5,5],["General Ledger & Month-end Close",5,5],["Tax Compliance",4,4],["Internal Controls",4,4],["ERP systems",4,4],["IFRS Knowledge",4,4],["Team Supervision",4,4],["Attention to detail",5,5],["Time Management",3,4],["Clear Communication",3,4]],
+"Senior Accountant":[["Financial reporting",5,4],["General Ledger & Month-end Close",5,4],["Reconciliations",4,4],["Tax Compliance",3,4],["ERP systems",4,4],["IFRS Knowledge",3,4],["Mentoring Accountants",3,3],["Attention to detail",5,4],["Time Management",3,4],["Data analysis",3,3]],
+"Accountant":[["Financial reporting",5,4],["General Ledger & Month-end Close",4,4],["Reconciliations",4,4],["Accounts Payable & Receivable",4,4],["ERP systems",4,3],["Tax Compliance",3,3],["Attention to detail",5,4],["Time Management",3,3],["Data analysis",3,3],["Clear Communication",2,3]],
+"Junior Accountant":[["Bookkeeping & Data Entry",5,3],["Reconciliations",4,3],["Accounts Payable & Receivable",4,3],["ERP systems",4,3],["Financial reporting",3,2],["Attention to detail",5,3],["Time Management",3,3],["Data analysis",2,2],["Clear Communication",2,3],["Curiosity",2,3]],
+"Corporate Treasury Specialist":[["Cash Flow Forecasting",5,4],["Bank Relationship Management",4,4],["Payments & Liquidity Management",5,4],["FX & Risk Awareness",4,4],["Financial modelling",3,3],["ERP systems",3,3],["Attention to detail",4,4],["Data analysis",4,4],["Clear Communication",3,3],["Ownership",3,4]],
+"Tax Lead":[["Corporate Tax & VAT Compliance",5,5],["Tax Planning & Advisory",4,4],["Cross-border Tax Knowledge",4,4],["Audit & Authority Liaison",4,4],["Tax Reporting",4,4],["ERP systems",3,3],["Attention to detail",5,5],["Project Management",3,3],["Clear Communication",3,4],["Data analysis",3,4]],
+/* Corporate Governance & Legal */
+"Head of Corporate Governance":[["Corporate Governance Frameworks",5,5],["Regulatory Compliance",5,5],["Board & Committee Support",4,4],["Policy Design",4,4],["Risk Management",4,4],["Stakeholder Management",4,4],["Leadership",4,4],["Executive Communication",4,5],["Attention to detail",4,4],["Project Management",3,4]],
+"Head of Legal":[["Contract Drafting & Negotiation",5,5],["Corporate & Commercial Law",5,5],["Regulatory Compliance",4,5],["Dispute Management",4,4],["Risk Assessment",4,4],["Leadership",4,4],["Executive Communication",4,5],["Business Partnering",4,4],["Attention to detail",4,5],["Time Management",3,4]],
+"Legal Counsel":[["Contract Drafting & Negotiation",5,4],["Corporate & Commercial Law",5,4],["Regulatory Compliance",4,4],["Legal Research",4,4],["Risk Assessment",4,4],["Dispute Management",3,3],["Business Partnering",3,4],["Attention to detail",5,5],["Clear Communication",4,4],["Time Management",3,4]],
+"Global Expansion Manager":[["Market Entry Strategy",5,5],["Entity Setup & Licensing",5,4],["Regulatory Research",4,4],["Project Management",5,4],["Stakeholder Management",4,4],["Vendor & Advisor Management",4,4],["Budgeting",3,4],["Executive Communication",4,4],["Adaptability",4,4],["Attention to detail",3,4]],
+"Expansion Associate":[["Market & Regulatory Research",5,3],["Entity Setup Support",4,3],["Project Coordination",4,3],["Document Preparation",4,3],["Vendor Coordination",3,3],["Data analysis",3,3],["Attention to detail",4,4],["Clear Communication",4,3],["Time Management",3,3],["Curiosity",3,3]],
+/* IT */
+"Chief Technical Officer | Chief Information Security Officer":[["Technology Strategy",5,5],["Information Security Governance",5,5],["System Architecture",5,5],["Delivery Management",4,4],["Vendor & Budget Management",4,4],["Leadership",5,5],["Risk Management",4,5],["Executive Communication",4,5],["Coaching & Development",3,4],["Product Knowledge",4,4]],
+"Head of IT Integration":[["Integration Architecture",5,5],["API Design",5,5],["Partner Technical Onboarding",4,4],["Delivery Planning",4,4],["Data Mapping & Quality",4,4],["Technical Leadership",4,4],["Stakeholder Management",4,4],["Problem Solving",4,4],["Clear Communication",3,4],["Product Knowledge",4,5]],
+"Front End Development Team Lead":[["Front-end Architecture",5,5],["Code Quality & Review",5,4],["UI Performance & Accessibility",4,4],["Delivery Planning",4,4],["Testing Practices",4,4],["Technical Leadership",5,4],["Coaching & Development",4,4],["Cross-functional Collaboration",3,4],["Clear Communication",3,4],["Product Knowledge",3,4]],
+"Senior Front-End Developer":[["JavaScript / TypeScript",5,5],["Front-end Frameworks",5,5],["UI Performance & Accessibility",4,4],["Testing Practices",4,4],["Code Quality & Review",4,4],["API Integration",4,4],["Problem Solving",4,4],["Mentoring Developers",3,3],["Clear Communication",3,4],["Product Knowledge",3,4]],
+"Front-End Developer":[["JavaScript / TypeScript",5,4],["Front-end Frameworks",5,4],["UI Performance & Accessibility",4,3],["Testing Practices",4,3],["Code Quality & Review",4,3],["API Integration",4,3],["Problem Solving",4,4],["Curiosity",3,3],["Clear Communication",3,3],["Product Knowledge",3,3]],
+"DevOps Engineer":[["CI/CD Pipelines",5,4],["Cloud Infrastructure",5,4],["Monitoring & Incident Response",5,4],["Infrastructure as Code",4,4],["Security Practices",4,4],["Containers & Orchestration",4,4],["Problem Solving",4,4],["Documentation",3,3],["Clear Communication",3,3],["Ownership",4,4]],
+"1C Developer":[["1C Platform Development",5,4],["Business Process Analysis",4,4],["Database & Query Design",4,4],["Integration (APIs, Exchange)",4,3],["Testing & Release",3,3],["Accounting Domain Knowledge",4,4],["Problem Solving",4,4],["Documentation",3,3],["Clear Communication",3,3],["Attention to detail",4,4]],
+"Junior 1C Developer":[["1C Platform Development",5,3],["Business Process Analysis",3,3],["Database & Query Design",4,3],["Integration (APIs, Exchange)",3,2],["Testing & Release",3,3],["Accounting Domain Knowledge",3,3],["Problem Solving",4,3],["Documentation",3,3],["Curiosity",3,3],["Attention to detail",4,3]],
+"Business Analyst":[["Requirements Gathering",5,4],["Process Mapping",5,4],["User Stories & Acceptance Criteria",4,4],["Data Analysis",4,4],["Stakeholder Management",4,4],["Testing & UAT Coordination",3,3],["Documentation",4,4],["Clear Communication",4,4],["Problem Solving",4,4],["Product Knowledge",4,4]],
+"Project Manager":[["Project Planning & Scheduling",5,5],["Scope & Risk Management",5,4],["Stakeholder Management",5,4],["Budget Tracking",4,4],["Agile / Delivery Methods",4,4],["Reporting & Status Communication",4,4],["Vendor Coordination",3,3],["Problem Solving",4,4],["Clear Communication",4,4],["Leadership",3,4]],
+"Information Security Manager":[["Security Policies & Standards",5,5],["Risk Assessment & Audits",5,4],["Identity & Access Management",4,4],["Incident Response",5,4],["Security Awareness Training",4,4],["Compliance (ISO 27001, GDPR)",4,4],["Vendor Security Review",3,3],["Attention to detail",4,4],["Clear Communication",3,4],["Problem Solving",4,4]],
+"IT Support Manager":[["Service Desk Management",5,5],["Incident & Problem Management",5,4],["Endpoint & Account Administration",4,4],["Asset & Licence Management",4,4],["Vendor Coordination",3,3],["Reporting & KPIs",3,3],["Coaching & Development",4,4],["Customer Service",4,4],["Clear Communication",4,4],["Process Improvement",3,4]],
+"IT Technical Support":[["Troubleshooting (Hardware & Software)",5,4],["Endpoint & Account Administration",4,4],["Ticketing & SLA Discipline",4,4],["Network Basics",4,3],["Onboarding & Offboarding Setup",4,4],["Security Hygiene",3,3],["Customer Service",4,4],["Clear Communication",4,4],["Documentation",3,3],["Time Management",3,3]],
+/* Marketing */
+"Head of Marketing":[["Marketing Strategy",5,5],["Brand Management",4,5],["Demand Generation",5,5],["Campaign Analytics & ROI",4,4],["Budget Management",4,4],["Content Strategy",4,4],["Leadership",5,5],["Cross-functional Collaboration",4,4],["Executive Communication",4,4],["Product Knowledge",3,4]],
+"Head of Digital Marketing":[["Digital Strategy",5,5],["Paid Media (SEM, Social)",5,5],["SEO & Web Analytics",5,4],["Marketing Automation & CRM",4,4],["Conversion Optimisation",4,4],["Campaign Analytics & ROI",5,4],["Budget Management",4,4],["Leadership",4,4],["Data analysis",4,4],["Product Knowledge",3,4]],
+"Marketing Lead":[["Campaign Planning & Execution",5,4],["Content Creation",4,4],["Social Media Management",4,4],["SEO & Web Analytics",4,3],["Marketing Automation & CRM",3,3],["Design Tools & Brand Consistency",3,3],["Project Management",4,4],["Data analysis",3,3],["Clear Communication",4,4],["Creativity",4,4]],
+/* People & Culture */
+"Head of People & Culture":[["People Strategy",5,5],["Employment Law & Compliance (multi-country)",4,5],["Talent Management & Succession",5,5],["Compensation & Benefits",4,4],["Employee Relations",4,4],["Organisational Design",4,4],["Leadership",5,5],["Executive Communication",4,5],["Change Management",4,4],["Data-driven HR",3,4]],
+"People Partner":[["Business Partnering",5,4],["Employee Relations",5,4],["Performance Management",4,4],["Employment Law & Compliance",4,4],["Workforce Planning",3,4],["Coaching Managers",4,4],["HR Systems & Data",3,3],["Influence",4,4],["Clear Communication",4,4],["Discretion & Integrity",5,5]],
+"Senior People Generalist":[["HR Operations & Administration",5,4],["Employment Law & Compliance",4,4],["Onboarding & Offboarding",4,4],["Employee Relations",4,4],["HR Systems & Data",4,4],["Policy Implementation",4,4],["Payroll Coordination",3,4],["Clear Communication",4,4],["Attention to detail",4,4],["Discretion & Integrity",5,5]],
+"People Generalist":[["HR Operations & Administration",5,4],["Employment Law & Compliance",4,3],["Onboarding & Offboarding",4,4],["Employee Relations",3,3],["HR Systems & Data",4,3],["Policy Implementation",3,3],["Payroll Coordination",3,3],["Clear Communication",4,4],["Attention to detail",4,4],["Discretion & Integrity",5,5]],
+"Junior People & Culture Generalist":[["HR Operations & Administration",5,3],["Onboarding & Offboarding",4,3],["HR Systems & Data",4,3],["Employment Law & Compliance",3,2],["Document & Record Keeping",4,3],["Employee Queries Handling",4,3],["Clear Communication",4,3],["Attention to detail",4,3],["Time Management",3,3],["Discretion & Integrity",5,4]],
+"Talent Acquisition Lead":[["Sourcing Strategy",5,5],["Interviewing & Assessment",5,5],["Hiring Manager Partnering",5,4],["Employer Branding",4,4],["ATS & Recruiting Analytics",4,4],["Offer Negotiation",4,4],["Pipeline Planning",4,4],["Coaching Recruiters",4,4],["Clear Communication",4,4],["Candidate Experience",4,4]],
+"Senior Talent Acquisition Partner":[["Sourcing (direct & passive)",5,5],["Interviewing & Assessment",5,4],["Hiring Manager Partnering",5,4],["Offer Negotiation",4,4],["ATS & Recruiting Analytics",4,4],["Employer Branding",3,3],["Market Mapping",4,4],["Candidate Experience",4,4],["Clear Communication",4,4],["Time Management",3,4]],
+"Talent Acquisition Partner":[["Sourcing (direct & passive)",5,4],["Interviewing & Assessment",5,4],["Hiring Manager Partnering",4,4],["Offer Negotiation",3,3],["ATS & Recruiting Analytics",4,3],["Employer Branding",3,3],["Market Mapping",3,3],["Candidate Experience",4,4],["Clear Communication",4,4],["Time Management",3,4]],
+"Talent Development Partner":[["Learning Needs Analysis",5,5],["Programme Design & Facilitation",5,5],["Talent Review & Succession",5,5],["Performance Management Frameworks",4,4],["Vendor & Budget Management",4,4],["Learning Analytics",4,4],["Stakeholder Management",4,4],["Coaching",4,4],["Executive Communication",4,4],["Change Management",3,4]],
+"Workplace Manager":[["Office & Facilities Management",5,4],["Vendor & Contract Management",4,4],["Health & Safety Compliance",4,4],["Budget & Cost Control",4,4],["Event & Travel Coordination",3,3],["Procurement",3,3],["Problem Solving",4,4],["Clear Communication",4,4],["Attention to detail",4,4],["Ownership",4,4]],
+/* Administration */
+"Business Assistant":[["Calendar & Travel Management",5,4],["Meeting Coordination & Minutes",4,4],["Document Preparation",4,4],["Expense & Invoice Handling",3,3],["Stakeholder Liaison",4,4],["Office Tools (M365)",4,4],["Discretion & Integrity",5,5],["Time Management",4,4],["Clear Communication",4,4],["Attention to detail",4,4]],
+/* Supply */
+"Head of Supply":[["Supply Strategy",5,5],["Supplier Relationship Management",5,5],["Contract Negotiation",5,5],["Rate & Inventory Optimisation",4,4],["Supplier Performance Review",4,4],["Market Awareness",4,4],["Leadership",4,4],["Data Analysis",3,4],["Executive Communication",3,4],["Product Knowledge",4,4]],
+"Supply and Revenue Manager":[["Revenue Management",5,5],["Supplier Relationship Management",4,4],["Rate & Inventory Optimisation",5,4],["Pricing Analysis",4,4],["Contract Negotiation",4,4],["Data Analysis",4,4],["Reporting",3,4],["Cross-functional Collaboration",3,4],["Clear Communication",3,4],["Product Knowledge",4,4]],
+"Supplier Associate":[["Supplier Onboarding",5,3],["Rate Loading & Content Checks",5,3],["Supplier Communication",4,3],["Data Entry & Accuracy",4,4],["Issue Resolution",3,3],["Reporting",3,3],["Attention to detail",4,4],["Time Management",3,3],["Clear Communication",3,3],["Product Knowledge",3,3]],
+};
+const roleLibKey=t=>String(t||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+const ROLE_LIB_IDX=Object.fromEntries(Object.entries(ROLE_LIB).map(([k,v])=>[roleLibKey(k),v]));
+function roleLib(title){
+  const k=roleLibKey(title); if(ROLE_LIB_IDX[k]) return ROLE_LIB_IDX[k];
+  // Senior/Junior/Lead variants of a known role inherit it
+  const base=k.replace(/^(senior|junior|lead|principal|associate)\s+/,"").replace(/\s+(team lead|lead|supervisor)$/,"");
+  return ROLE_LIB_IDX[base]||null;
+}
+
 /* ============================== platform additions ============================== */
 const isHeadOf=(me)=>D.depts.filter(d=>d.head===me).map(d=>d.id);
 
 /* ---------- role criteria editor (what each role is scored on when no workbook is used) ---------- */
+/* who may edit which criteria: TD everything; a department head every role in their departments; a manager the roles their own reports hold */
+function critScope(me){
+  if(me===TD) return null;
+  const heads=isHeadOf(me), reps=reportsOf(me);
+  if(!heads.length&&!reps.length) return null;
+  const depts=[...new Set([...heads,...reps.map(p=>p.dept)])];
+  return {depts, roles:heads.length?null:new Set(reps.map(p=>p.region+"|"+p.title)), head:heads.length>0};
+}
 function vRoleCrit(){
-  const me=U.me, mine=me===TD?null:isHeadOf(me), depts=D.depts.filter(d=>d.id!=="leadership"&&(!mine||mine.includes(d.id)));
+  const me=U.me, cs=critScope(me), depts=D.depts.filter(d=>d.id!=="leadership"&&(!cs||cs.depts.includes(d.id)));
   if(!depts.length) return "";
   const c=U.rc=U.rc||{dept:depts[0].id,region:D.regions[0]?.id||"dubai",role:null,newSkill:""}; if(!depts.find(d=>d.id===c.dept)) c.dept=depts[0].id;
-  const roles=[...new Set(active().filter(p=>p.dept===c.dept&&p.region===c.region&&p.id!==TD).map(p=>p.title).filter(Boolean))].sort();
+  const allowed=r=>!cs||!cs.roles||cs.roles.has(c.region+"|"+r);
+  const roles=[...new Set(active().filter(p=>p.dept===c.dept&&p.region===c.region&&p.id!==TD).map(p=>p.title).filter(Boolean))].filter(allowed).sort();
   const key=r=>c.region+"|"+r, status=r=>D.criteria?.[key(r)]?.length?["custom",`Custom · ${D.criteria[key(r)].length} skills`]:critForRole(c.region,r)?["lib","Built-in library"]:["none","Not set"];
   if(c.role&&!roles.includes(c.role)) c.role=null;
   const cur=c.role?(D.criteria?.[key(c.role)]||critForRole(c.region,c.role)||[]):[];
+  const tot=cur.reduce((a,x)=>a+(+x[1]||0),0), pct=w=>tot?Math.round(100*w/tot):0;
   const n=r=>active().filter(p=>p.dept===c.dept&&p.region===c.region&&p.title===r).length;
   return `<section class="panel sec"><div class="head"><h2 style="font-size:20px">Role criteria for scoring in the Growth Hub</h2><span class="sub">per department, market and role</span></div>
-    <p class="sub" style="margin-bottom:12px">When a review cycle opens, every person is scored on their role's skills. Roles in the built-in library are covered already. Roles marked <b>Not set</b> are skipped until someone defines them here. Importance says how much a skill counts; required level is the bar (1–5).</p>
+    <p class="sub" style="margin-bottom:12px">When a review cycle opens, every person is scored on their role's skills. Every role has a built-in set to start from${cs&&!cs.head?" (you can adjust the roles your own reports hold)":""}. Add or remove skills, set each skill's <b>weight</b> (its share of the overall score is worked out from the weights, always totalling 100%) and the <b>required level</b> (the bar, 1–5). Colours: green from ${D.settings.rb.green}% of the requirement, red below ${D.settings.rb.amber}%, amber in between.</p>
     <div class="filters">${sel("rcDept",depts.map(d=>[d.id,d.name]),c.dept,"Department")}${sel("rcRegion",D.regions.map(r=>[r.id,r.name]),c.region,"Market")}</div>
     <div class="grid-even" style="margin-top:12px"><div><table><thead><tr><th>Role</th><th>People</th><th>Criteria</th></tr></thead><tbody>
       ${roles.map(r=>{const [k,l]=status(r);return `<tr class="click ${c.role===r?"on":""}" data-rcrole="${esc(r)}"><td><b>${esc(r)}</b></td><td>${n(r)}</td><td><span class="chip ${k==="none"?"bad":k==="custom"?"ok":""}">${l}</span></td></tr>`}).join("")||`<tr><td colspan="3" class="meta">No active people in this department and market.</td></tr>`}
     </tbody></table></div>
     <div>${c.role?`<div class="head"><h3>${esc(c.role)} · ${esc(region(c.region).name)}</h3><span class="meta">${status(c.role)[1]}</span></div>
-      <table><thead><tr><th>Skill</th><th>Importance</th><th>Required</th><th></th></tr></thead><tbody>
-      ${cur.map(([s,im,rq],i)=>`<tr><td>${esc(s)}</td><td><select data-rcv="${i}|1" aria-label="Importance of ${esc(s)}">${[1,2,3,4,5].map(v=>`<option ${v===im?"selected":""}>${v}</option>`).join("")}</select></td><td><select data-rcv="${i}|2" aria-label="Required level of ${esc(s)}">${[1,2,3,4,5].map(v=>`<option ${v===rq?"selected":""}>${v}</option>`).join("")}</select></td><td><button class="link" data-rcrm="${i}" aria-label="Remove ${esc(s)}">×</button></td></tr>`).join("")||`<tr><td colspan="4" class="meta">No skills yet. Add the first one below, or copy a set.</td></tr>`}
+      <table><thead><tr><th>Skill</th><th>Weight (1–10)</th><th class="num">Share</th><th>Required</th><th></th></tr></thead><tbody>
+      ${cur.map(([s,im,rq],i)=>`<tr><td>${esc(s)}</td><td><select data-rcv="${i}|1" aria-label="Weight of ${esc(s)}">${[1,2,3,4,5,6,7,8,9,10].map(v=>`<option ${v===+im?"selected":""}>${v}</option>`).join("")}</select></td><td class="num"><b>${pct(+im)}%</b></td><td><select data-rcv="${i}|2" aria-label="Required level of ${esc(s)}">${[1,2,3,4,5].map(v=>`<option ${v===+rq?"selected":""}>${v}</option>`).join("")}</select></td><td><button class="link" data-rcrm="${i}" aria-label="Remove ${esc(s)}">×</button></td></tr>`).join("")||`<tr><td colspan="5" class="meta">No skills yet. Add the first one below, or copy a set.</td></tr>`}
+      ${cur.length?`<tr><td><b>Total</b></td><td class="meta">${tot} points</td><td class="num"><b>100%</b></td><td></td><td></td></tr>`:""}
       </tbody></table>
       <div class="row" style="margin-top:10px"><input id="rcNew" placeholder="Add a skill, e.g. Supplier negotiation" value="${esc(c.newSkill||"")}" list="rcSkills" style="flex:1 1 220px"><datalist id="rcSkills">${skillsLib().map(s=>`<option value="${esc(s)}">`).join("")}</datalist><button class="btn sm" data-do="rcadd">Add skill</button></div>
       <div class="row" style="margin-top:10px"><select id="rcCopy" aria-label="Copy criteria from" style="flex:1 1 220px"><option value="">Copy from…</option>${D.regions.filter(r=>r.id!==c.region).map(r=>critForRole(r.id,c.role)?`<option value="r|${r.id}">${esc(c.role)} in ${esc(r.name)}</option>`:"").join("")}${roles.filter(r=>r!==c.role&&critForRole(c.region,r)).map(r=>`<option value="o|${esc(r)}">${esc(r)} (same market)</option>`).join("")}</select><button class="btn sm" data-do="rccopy">Copy</button>
-        ${D.criteria?.[key(c.role)]?`<button class="btn sm" data-do="rcreset">Remove custom set</button>`:""}</div>
+        ${D.criteria?.[key(c.role)]?`<button class="btn sm" data-do="rcreset">Back to the built-in set</button>`:""}</div>
       <p class="meta" style="margin-top:8px">Changes apply to the next cycle. People already scored in an open cycle keep that cycle's criteria (edit those above).</p>`
       :`<div class="empty">Select a role to see or set its criteria.</div>`}</div></div></section>`;
 }
@@ -2548,7 +2665,7 @@ async function boot(){
   app.innerHTML=`<section class="panel"><h2>Signing you in…</h2></section>`;
   try{ await SP.whoAmI(); }catch(e){ signInPage("Couldn't read your Microsoft 365 account: "+(e.message||e)); return; }
   let missing=false;
-  try{ D=await SP.loadAll(); }catch(e){ if(e.status===404){ missing=true; D=emptyData(); } else { app.innerHTML=errBox("Couldn't load the Growth Hub data: "+(e.message||e)); return; } }
+  try{ D=await SP.loadAll(); if(D.settings&&D.settings.rb&&D.settings.rb.green===90&&D.settings.rb.amber===80){ D.settings.rb={green:85,amber:50}; save(); } }catch(e){ if(e.status===404){ missing=true; D=emptyData(); } else { app.innerHTML=errBox("Couldn't load the Growth Hub data: "+(e.message||e)); return; } }
   if(missing||SP.empty||!D.settings.tdEmail){ U=freshUI(TD); app.innerHTML=vSetup(missing?"lists":"pack"); SP.setup=!missing; SP.ready=true; return; }
   SP.ready=true;
   const me=SP.personFor(SP.user.email);
