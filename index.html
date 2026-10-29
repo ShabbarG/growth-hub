@@ -817,6 +817,20 @@ function hbars(items,max,fmt){return `<div class="hbars">${items.map(i=>`<div cl
 const ppl=n=>n+(n===1?" person":" people");
 
 /* ============================== Growth: employee ============================== */
+function myReviewCycles(id){return D.cycles.filter(c=>c.phase==="published"&&!c.pilot||(c.pilot&&c.phase==="published")).filter(c=>{const r=recFor(id,c.id);return r&&Object.keys(r.scores).length}).reverse()}
+function vMyReview(){
+  const me=U.me, p=person(me), cys=myReviewCycles(me); if(!cys.length) return `<div class="pagehead"><div><span class="eyebrow">Me</span><h1>My review</h1></div></div>${emptyBox("Your first talent review will appear here once it is published.")}`;
+  U.myrev=cys.find(c=>c.id===U.myrev)?U.myrev:cys[0].id; const c=cys.find(x=>x.id===U.myrev), r=recFor(me,c.id), i=cys.indexOf(c), prevC=cys[i+1], pr=prevC?recFor(me,prevC.id):null, a=Math.round(100*att(r)), b=band(r);
+  const rows=Object.keys(r.scores).map(k=>({skill:k,score:r.scores[k],req:reqOf(r,k),imp:impOf(r,k),prev:pr?pr.scores[Object.keys(pr.scores).find(x=>sameSkill(x,k))]:null})).sort((x,y)=>(y.imp*(y.req-y.score))-(x.imp*(x.req-x.score)));
+  const tot=rows.reduce((s,x)=>s+x.imp,0), strengths=rows.filter(x=>skillBand(x.score,x.req)==="green"), focus=rows.filter(x=>skillBand(x.score,x.req)!=="green").slice(0,3);
+  return `<div class="pagehead"><div><span class="eyebrow">Me · ${esc(c.name)}</span><h1>My review</h1><p class="sub">How ${esc(r.mgr?pname(r.mgr):"your manager")} assessed you on each skill of your role (${esc(r.role)}), against the level the role requires. Use it as the starting point for your 1:1 and your growth plan.</p></div>
+    <div class="row">${sel("myRevCyc",cys.map(x=>[x.id,x.name]),c.id,"Review")}</div></div>
+  <div class="kpis"><div class="kpi"><b class="b-${b}" style="border-radius:8px;padding:0 8px">${a}%</b><span>Of your role's requirement overall</span>${pr?`<span class="meta" style="display:block;margin-top:4px">${Math.round(100*att(pr))}% in ${esc(prevC.name)}</span>`:""}</div><div class="kpi"><b>${strengths.length} of ${rows.length}</b><span>Skills at or above the bar</span></div><div class="kpi"><b style="font-size:17px">${esc(focus[0]?focus[0].skill:"–")}</b><span>Biggest opportunity</span></div></div>
+  <section class="panel"><div class="head"><h2>Skill by skill</h2><span class="sub">green ${D.settings.rb.green}%+ of the required level · amber ${D.settings.rb.amber}–${D.settings.rb.green-1}% · red below ${D.settings.rb.amber}%</span></div><div class="scroll"><table><thead><tr><th>Skill</th><th class="num">Weight</th><th class="num">Required</th><th class="num">Your score</th><th>Level</th>${pr?"<th>Last review</th>":""}</tr></thead><tbody>
+    ${rows.map(x=>`<tr><td>${esc(x.skill)}</td><td class="num">${Math.round(100*x.imp/tot)}%</td><td class="num">${x.req}</td><td class="num"><b>${x.score}</b> ${lvl(x.score,x.req)}</td><td>${skillChip(x.score,x.req)}</td>${pr?`<td>${x.prev!=null?x.prev+(x.score-x.prev>0?` <span class="chip ok">+${x.score-x.prev}</span>`:x.score-x.prev<0?` <span class="chip bad">${x.score-x.prev}</span>`:""):'<span class="meta">–</span>'}</td>`:""}</tr>`).join("")}</tbody></table></div></section>
+  ${focus.length?`<section class="panel"><div class="head"><h2>Where to focus next</h2><span class="sub">highest weight, furthest from the bar</span></div><div class="stack">${focus.map(x=>{const cs=D.catalog.filter(k=>shown(k)&&courseFor(k,x.skill)).slice(0,2);return `<div class="row between"><div><b>${esc(x.skill)}</b><div class="meta">Scored ${x.score}, role needs ${x.req}</div></div><div class="row">${cs.map(k=>`<button class="btn sm" data-request="${k.id}">${esc(k.title)}</button>`).join("")||`<span class="meta">Ask ${esc(first(r.mgr))} or Talent Development about options.</span>`}</div></div>`}).join("")}</div></section>`:`<section class="panel"><div class="notice n-ok">You meet or exceed every requirement of your role. Talk to ${esc(first(r.mgr))} about stretch goals and the next role.</div></section>`}
+  <p class="meta">Only you, your manager, your department and regional leadership and Talent Development can see these scores. Colleagues never see each other's.</p>`;
+}
 function vHome(){
   const p=person(U.me), mine=D.reqs.filter(r=>r.pid===p.id), st=stats([p.id]), plan=growthPlan(p), inProg=mine.filter(r=>OPEN.includes(r.status)||["approved","booked"].includes(r.status));
   return `<section class="panel hero"><div class="avatar">${initials(p.name)}</div>
@@ -959,6 +973,7 @@ function vSettings(){
   <section class="panel"><div class="head"><h2>Talent Review</h2><span class="sub">pilot: can be switched off without affecting Growth</span></div>
     <label class="row"><input type="checkbox" id="reviewOn" ${S.reviewOn?"checked":""}> <span><b>Use Talent Review data</b> for focus areas, approval context and the Talent Review workspace for managers.</span></label>
     <p class="meta" style="margin:8px 0 12px">Off: Growth keeps working. Suggestions come from the catalogue and what's popular in each department, and managers approve without scores. Your uploads stay stored.</p>
+    <label class="row" style="gap:8px;margin-bottom:12px"><input type="checkbox" id="shareScores" ${D.settings.shareScores!==false?"checked":""}> Each person can see their own published scores (My review)</label>
     <div class="f3"><div class="field"><label for="rbGreen">Green from (% of requirement)</label><input id="rbGreen" type="number" min="50" max="120" value="${S.rb.green}"></div>
       <div class="field"><label for="rbAmber">Amber from (% of requirement)</label><input id="rbAmber" type="number" min="40" max="119" value="${S.rb.amber}"></div><div></div></div></section>
   <section class="panel"><div class="head"><h2>Approval chain</h2><span class="sub">every approval happens in Outlook or Teams</span></div>
@@ -1831,13 +1846,13 @@ function dVendor(id){
 }
 
 /* ============================== in-platform scoring & calibration ============================== */
-const pubCyc=c=>!c.phase||c.phase==="published";
+const pubCyc=c=>(!c.phase||c.phase==="published")&&!c.pilot;
 const liveCyc=()=>D.cycles.find(c=>c.phase==="scoring"||c.phase==="calibration")||null;
 const PHASE={scoring:"Managers scoring",calibration:"Calibration",published:"Published"};
-function openScoring(name,due){
+function openScoring(name,due,opts={}){
   const prevId=latestCycleWithData(), id=nid("c","uid"), R={records:[],bamboo:{},uploads:[]}, skipped=[];
-  const cy={id,name,state:"Current",phase:"scoring",date:iso(D.now),due,opened:D.now,calib:{},nudged:{}}; D.cycles.push(cy); D.reviews[id]=R;
-  for(const p of active().filter(p=>p.mgr&&p.dept!=="leadership"&&p.id!==TD)){
+  const cy={id,name,state:"Current",phase:"scoring",date:iso(D.now),due,opened:D.now,calib:{},nudged:{},pilot:!!(opts.depts&&opts.depts.length),depts:opts.depts||null,quiet:!!opts.quiet}; D.cycles.push(cy); D.reviews[id]=R;
+  for(const p of active().filter(p=>p.mgr&&p.dept!=="leadership"&&p.id!==TD&&(!cy.depts||cy.depts.includes(p.dept)))){
     const pr=recFor(p.id,prevId); let crit=critForRole(p.region,p.title)||(pr&&pr.role===p.title?Object.keys(pr.scores).map(k=>[k,impOf(pr,k),reqOf(pr,k)]):null);
     if(!crit||!crit.length){skipped.push(p);continue}
     const team=p.dept==="commercial"&&ROLESK[p.title]?ROLESK[p.title].tab+" Skills GAP Analysis":p.title;
@@ -1845,7 +1860,7 @@ function openScoring(name,due){
       imp:Object.fromEntries(crit.map(c=>[c[0],c[1]])),req:Object.fromEntries(crit.map(c=>[c[0],c[2]])),src:"platform",file:"Scored in the Growth Hub",status:"open",mgr:p.mgr});
   }
   cy.skipped=skipped.map(p=>p.id); const mgrs=[...new Set(R.records.map(r=>r.mgr))];
-  mgrs.forEach(m=>{const n=R.records.filter(r=>r.mgr===m).length;mail(m,"action",`Talent review is open: score ${n} ${n===1?"person":"people"} by ${fmtD(Date.parse(due))}`,`${name} has started.\n\nScore each person 1–5 on their role's skills. The required level is shown next to each one, and last cycle's score where there is one. It takes about 5 minutes per person.\n\nNothing to download or upload: it's all in the Growth Hub.`,{act:"score"})});
+  if(!cy.quiet) mgrs.forEach(m=>{const n=R.records.filter(r=>r.mgr===m).length;mail(m,"action",`Talent review is open: score ${n} ${n===1?"person":"people"} by ${fmtD(Date.parse(due))}`,`${name} has started.\n\nScore each person 1–5 on their role's skills. The required level is shown next to each one, and last cycle's score where there is one. It takes about 5 minutes per person.\n\nNothing to download or upload: it's all in the Growth Hub.`,{act:"score"})});
   R.uploads.push({t:D.now,by:pname(U.me),what:`Cycle opened: ${R.records.length} people to score by ${mgrs.length} managers`,kind:"cycle"});
   logA(`Review cycle opened: ${name} (${R.records.length} people, due ${due})`);
   return {id,n:R.records.length,mgrs:mgrs.length,skipped};
@@ -1853,7 +1868,7 @@ function openScoring(name,due){
 function scoringProgress(c){const recs=D.reviews[c.id].records.filter(r=>r.src==="platform"), by={};
   recs.forEach(r=>{const m=by[r.mgr]=by[r.mgr]||{mgr:r.mgr,n:0,done:0};m.n++;if(r.status==="submitted")m.done++});
   return {recs,n:recs.length,done:recs.filter(r=>r.status==="submitted").length,mgrs:Object.values(by).sort((a,b)=>(a.done/a.n)-(b.done/b.n))}}
-function nudgeScorers(c,force){let n=0;scoringProgress(c).mgrs.filter(m=>m.done<m.n).forEach(m=>{if(!force&&c.nudged[m.mgr])return;c.nudged[m.mgr]=D.now;n++;
+function nudgeScorers(c,force){let n=0;if(c.quiet)return 0;scoringProgress(c).mgrs.filter(m=>m.done<m.n).forEach(m=>{if(!force&&c.nudged[m.mgr])return;c.nudged[m.mgr]=D.now;n++;
   mail(m.mgr,"nudge",`Reminder: ${m.n-m.done} talent review score${m.n-m.done>1?"s":""} still to do`,`${c.name} is due ${fmtD(Date.parse(c.due))}. ${m.done} of ${m.n} done.`,{act:"score"})});return n}
 function scoreJob(){const c=liveCyc();if(!c||c.phase!=="scoring")return 0;const left=Math.round((Date.parse(c.due)-D.now)/DAY);return left<=5?nudgeScorers(c,false):0}
 function vScore(){
@@ -1888,11 +1903,14 @@ function vCalib(){
 }
 function cyclePanel(){
   const c=liveCyc();
-  if(!c) return `<section class="panel"><div class="head"><h2>Next cycle</h2><span class="sub">managers score in the platform; no workbooks to send or collect</span></div>
-    <div class="row"><div class="field" style="flex:1 1 200px;max-width:260px"><label for="cyName">Cycle name</label><input id="cyName" value="${esc(nextCycleName())}"></div><div class="field" style="flex:0 1 180px"><label for="cyDue">Scores due</label><input id="cyDue" type="date" value="${iso(D.now+21*DAY)}"></div><button class="btn primary" data-do="opencycle" style="align-self:end">Open for scoring</button></div>
-    <p class="meta" style="margin-top:8px">Each person gets last cycle's skills and required levels (or their role's criteria if they changed role). Managers are emailed and reminded 5 days before the deadline.</p></section>`;
+  const pilots=D.cycles.filter(x=>x.pilot&&x.phase==="published");
+  if(!c) return `${pilots.map(x=>`<section class="panel"><div class="head"><h2>${esc(x.name)} <span class="chip">Pilot · published</span></h2><span class="sub">${(D.reviews[x.id]?.records||[]).length} people · ${x.depts.map(d=>dept(d)?.name||d).join(", ")}</span></div><p class="meta">Pilot results never feed Growth suggestions or the real review history. <button class="link" data-do="discardpilot" data-id="${x.id}">Discard this pilot cycle</button></p></section>`).join("")}<section class="panel"><div class="head"><h2>Next cycle</h2><span class="sub">managers score in the platform; no workbooks to send or collect</span></div>
+    <div class="row"><div class="field" style="flex:1 1 200px;max-width:260px"><label for="cyName">Cycle name</label><input id="cyName" value="${esc(nextCycleName())}"></div><div class="field" style="flex:0 1 180px"><label for="cyDue">Scores due</label><input id="cyDue" type="date" value="${iso(D.now+21*DAY)}"></div><div class="field" style="flex:0 1 200px"><label for="cyScope">Scope</label><select id="cyScope"><option value="all" ${U.cyScope!=="pilot"?"selected":""}>Whole company</option><option value="pilot" ${U.cyScope==="pilot"?"selected":""}>Pilot: chosen departments</option></select></div><button class="btn primary" data-do="opencycle" style="align-self:end">Open for scoring</button></div>
+    ${U.cyScope==="pilot"?`<div class="row" style="margin-top:10px;flex-wrap:wrap;gap:8px 16px">${D.depts.filter(d=>d.id!=="leadership").map(d=>`<label class="row" style="gap:6px"><input type="checkbox" data-cydept="${d.id}" ${(U.cyDepts||[]).includes(d.id)?"checked":""}> ${esc(d.name)} <span class="meta">(${active().filter(p=>p.dept===d.id&&p.mgr&&p.id!==TD).length})</span></label>`).join("")}</div>`:""}
+    <label class="row" style="gap:6px;margin-top:10px"><input type="checkbox" id="cyQuiet" ${U.cyQuiet?"checked":""}> Quiet: don't email managers or employees for this cycle (you tell them yourself)</label>
+    <p class="meta" style="margin-top:8px">Each person is scored on their role's current criteria. ${U.cyQuiet?"No emails or reminders go out.":"Managers are emailed and reminded 5 days before the deadline."} A pilot cycle can be discarded afterwards; it never counts as the real review.</p></section>`;
   const P=scoringProgress(c);
-  return `<section class="panel"><div class="head"><h2>${esc(c.name)} · ${PHASE[c.phase]}</h2><span class="sub">${c.phase==="scoring"?`due ${fmtD(Date.parse(c.due))}`:`${Object.keys(c.calib).length} department(s) confirmed`}</span></div>
+  return `<section class="panel"><div class="head"><h2>${esc(c.name)} · ${PHASE[c.phase]}${c.pilot?` <span class="chip">Pilot · ${c.depts.map(d=>dept(d)?.name||d).join(", ")}</span>`:""}${c.quiet?` <span class="chip">Quiet</span>`:""}</h2><span class="sub">${c.phase==="scoring"?`due ${fmtD(Date.parse(c.due))}`:`${Object.keys(c.calib).length} department(s) confirmed`}</span></div>${c.pilot?`<p class="meta" style="margin:0 0 8px"><button class="link" data-do="discardpilot" data-id="${c.id}">Discard this pilot cycle</button> (removes its scores; the audit log keeps a note)</p>`:""}
     <div class="row between"><div style="flex:1 1 260px"><div class="meter" style="height:12px"><span style="width:${P.n?100*P.done/P.n:0}%"></span></div><span class="meta">${P.done} of ${P.n} people submitted</span></div>
     ${c.phase==="scoring"?`<div class="row"><button class="btn" data-do="nudgeall">Remind late managers</button><button class="btn primary" data-do="tocalib">Close scoring, start calibration</button></div>`:`<button class="btn primary" data-nav="calib">Open calibration</button>`}</div>
     ${(c.skipped||[]).length?`<div class="notice n-warn" style="margin-top:12px"><b>Not in this cycle yet (no skills defined for their role):</b> ${c.skipped.map(id=>`${esc(pname(id))} <span class="meta">${esc(person(id)?.title||"")}</span>`).join(" · ")}. They join automatically from the next cycle once their department's criteria are agreed.</div>`:""}
@@ -1916,7 +1934,7 @@ function navItems(){
   if(me===TD) items.push(["Talent Development",[["overview","Overview"],["allreq","All requests",D.reqs.filter(r=>(r.status==="pending"&&r.chain[r.step].k==="gm"&&r.gmReply)||r.status==="approved").length],["people","People"],["catalog","Course catalogue"],["vendors","Vendors"],["payments","Payments",D.reqs.filter(r=>r.pay&&r.pay.status!=="paid").length],["prog","Group programmes"],["audit","Audit log"],["settings","Settings"]]]);
   if(isMgr(me)) items.push(["My team",[["team","Team",D.reqs.filter(r=>r.status==="pending"&&r.chain[r.step].who===me&&r.chain[r.step].k!=="gm").length+D.mails.filter(m=>m.to===me&&m.act==="impact"&&!m.done).length],["teamreq","Team requests"],["tplans","Team plans",reportsOf(me).filter(p=>D.plans[p.id]?.status==="shared").length]]]);
   const inv=D.programmes.filter(g=>g.status==="planned"&&g.participants.some(x=>x.pid===me&&x.status==="invited")).length;
-  items.push(["Me",[["home","My growth",inv],["plan","My plan"],["explore","Explore courses"],["mentor","Mentoring",D.mentorships.filter(m=>m.mentor===me&&m.status==="requested").length],["cal","Calendar"],["myreq","My requests",D.reqs.filter(r=>r.pid===me&&["info","booked"].includes(r.status)).length]]]);
+  items.push(["Me",[["home","My growth",inv],...(D.settings.shareScores!==false&&myReviewCycles(me).length?[["myreview","My review"]]:[]),["plan","My plan"],["explore","Explore courses"],["mentor","Mentoring",D.mentorships.filter(m=>m.mentor===me&&m.status==="requested").length],["cal","Calendar"],["myreq","My requests",D.reqs.filter(r=>r.pid===me&&["info","booked"].includes(r.status)).length]]]);
   items.push(["",[["reports","Reports"],["outlook",SP.mode==="prod"?"Notifications":"Outlook (demo)",unread],["help","How it works"]]]);
   return items;
 }
@@ -1930,7 +1948,7 @@ function render(){
   if(SP.mode==="prod"){const w=document.getElementById("whoName"), s=document.getElementById("whoSel"); const td=SP.realId===TD; s.hidden=!td; w.hidden=td; w.textContent=(person(SP.realId)||{}).name||SP.user?.name||""; const pb=document.getElementById("prodBar"); pb.hidden=!SP.readOnly; if(SP.readOnly) pb.querySelector("span").innerHTML=`Viewing as <b>${esc(pname(U.me))}</b> · read-only · recorded in the audit log`;}
   document.getElementById("wsBox").innerHTML=canReview(me)?`<div class="ws" role="group" aria-label="Workspace"><button data-ws="growth" aria-pressed="${U.ws==="growth"}">Growth</button><button data-ws="review" aria-pressed="${U.ws==="review"}">Talent Review</button></div>`:"";
   document.getElementById("nav").innerHTML=nav.map(([g,its])=>`<div class="grp">${g?`<span>${esc(g)}</span>`:""}${its.map(([k,l,c])=>`<button data-nav="${k}" ${U.view===k?'aria-current="page"':""}>${esc(l)}${c?`<span class="badge">${c}</span>`:""}</button>`).join("")}</div>`).join("");
-  const V={home:vHome,explore:vExplore,myreq:vMyReq,team:vTeam,teamreq:vTeamReq,overview:vOverview,allreq:vAllReq,people:vPeople,catalog:vCatalog,payments:vPayments,settings:vSettings,reports:vReports,outlook:vOutlook,review:vReview,uploads:vUploads,criteria:vCriteria,
+  const V={myreview:vMyReview,home:vHome,explore:vExplore,myreq:vMyReq,team:vTeam,teamreq:vTeamReq,overview:vOverview,allreq:vAllReq,people:vPeople,catalog:vCatalog,payments:vPayments,settings:vSettings,reports:vReports,outlook:vOutlook,review:vReview,uploads:vUploads,criteria:vCriteria,
     score:vScore,calib:vCalib,vendors:vVendors,dash:vDash,impact:vImpact,succ:vSucc,plan:vPlan,tplans:vTeamPlans,mentor:vMentor,cal:vCal,prog:vProg,audit:vAudit,help:vHelp};
   document.getElementById("app").innerHTML=V[U.view]();
   const dr=U.drawer, el=document.getElementById("drawer");
@@ -2040,15 +2058,16 @@ function doAction(a,d){
     const P=scoringProgress(c);if(P.done===P.n)mail(TD,"info",`All scores are in: ${c.name}`,`Every manager has submitted. Close scoring to start calibration.`,{});toast(`${r.name.split(" ")[0]}'s scores submitted.`);return render()}
   if(a==="unsubmit"){const r=D.reviews[liveCyc().id].records.find(x=>x.id===d.id);r.draft={...r.scores};r.scores={};r.status="open";toast("Reopened. Submit again when you're done.");return render()}
   if(a==="opencycle"){const nm=val("cyName"),due=val("cyDue");if(!nm||!due)return toast("Name the cycle and set a due date.");if(D.cycles.some(c=>c.name===nm))return toast("A cycle with that name already exists.");
-    D.cycles.forEach(c=>{if(c.state==="Current")c.state="Closed"});const o=openScoring(nm,due);U.up.cyc=o.id;toast(`${nm} is open. ${o.mgrs} managers emailed to score ${o.n} people.${o.skipped.length?` ${o.skipped.length} people have no criteria for their role yet.`:""}`);return render()}
+    D.cycles.forEach(c=>{if(c.state==="Current")c.state="Closed"});const depts=[...document.querySelectorAll("input[data-cydept]:checked")].map(x=>x.dataset.cydept), quiet=!!document.getElementById("cyQuiet")?.checked, pilot=val("cyScope")==="pilot"; if(pilot&&!depts.length) return toast("Tick at least one department for the pilot."); const o=openScoring(nm,due,{depts:pilot?depts:null,quiet}); if(!o.n){D.cycles=D.cycles.filter(c=>c.id!==o.id);delete D.reviews[o.id];return toast("Nobody to score in that scope.")} U.up.cyc=o.id;toast(`${nm} is open${pilot?" (pilot)":""}. ${quiet?"No emails sent; ":`${o.mgrs} managers emailed; `}${o.n} people to score.${o.skipped.length?` ${o.skipped.length} people have no criteria for their role yet.`:""}`);return render()}
+  if(a==="discardpilot"){const c=D.cycles.find(x=>x.id===d.id);if(!c||!c.pilot)return;if(!confirm(`Discard "${c.name}" and all its pilot scores?`))return;const n=(D.reviews[c.id]?.records||[]).length;D.cycles=D.cycles.filter(x=>x.id!==c.id);delete D.reviews[c.id];const last=D.cycles[D.cycles.length-1];if(last&&!D.cycles.some(x=>x.state==="Current"))last.state="Current";logA(`Pilot cycle discarded: ${c.name} (${n} records)`);U.up.cyc=D.cycles[D.cycles.length-1]?.id;toast("Pilot cycle discarded.");return render()}
   if(a==="nudgeall"){const n=nudgeScorers(liveCyc(),true);toast(n?`Reminder emailed to ${n} manager${n>1?"s":""}.`:"Everyone has submitted.");return render()}
   if(a==="tocalib"){const c=liveCyc(),P=scoringProgress(c);c.phase="calibration";
     D.depts.filter(x=>x.head&&D.reviews[c.id].records.some(r=>r.dept===x.id&&Object.keys(r.scores).length)).forEach(x=>mail(x.head,"action",`Calibrate ${x.name}: ${c.name}`,`Managers have scored. Before results are published, check scores are fair across managers in ${x.name} and confirm.\n\nTalent Review > Calibration in the Growth Hub.`,{act:"calib"}));
     D.reviews[c.id].uploads.push({t:D.now,by:pname(U.me),what:`Scoring closed: ${P.done} of ${P.n} submitted. Calibration started.`,kind:"cycle"});logA(`${c.name}: scoring closed, calibration started`);U.ws="review";U.view="calib";toast(`Calibration started. ${P.n-P.done?P.n-P.done+" unscored people are left out. ":""}Department heads have been emailed.`);return render()}
   if(a==="calibok"){const c=liveCyc();c.calib[U.cdept]={by:U.me,t:D.now};logA(`${c.name}: ${dept(U.cdept).name} calibration confirmed`);mail(TD,"info",`${dept(U.cdept).name} calibrated: ${c.name}`,`${pname(U.me)} confirmed the scores.`,{});toast("Confirmed. Talent Development has been told.");return render()}
   if(a==="publish"){const c=liveCyc();c.phase="published";c.date=iso(D.now);D.cycles.forEach(x=>{x.state=x.id===c.id?"Current":"Closed"});const recs=D.reviews[c.id].records.filter(r=>Object.keys(r.scores).length);
-    [...new Set(recs.map(r=>r.mgr))].forEach(m=>mail(m,"info",`${c.name} results are ready`,`Your team's review is in Talent Review, compared with the last cycle.`,{}));
-    recs.forEach(r=>mail(r.pid,"info","Your focus areas have been updated",`Following ${c.name}, the Growth Hub has refreshed the courses picked for you. Have a look and talk them through with ${first(r.mgr)}.`,{}));
+    if(!c.quiet){[...new Set(recs.map(r=>r.mgr))].forEach(m=>mail(m,"info",`${c.name} results are ready`,`Your team's review is in Talent Review, compared with the last cycle.`,{}));
+    recs.forEach(r=>mail(r.pid,"info",D.settings.shareScores!==false?"Your talent review is ready":"Your focus areas have been updated",D.settings.shareScores!==false?`${c.name} is published. Open My review in the Growth Hub to see how you were assessed on each skill of your role, and talk it through with ${first(r.mgr)}.`:`Following ${c.name}, the Growth Hub has refreshed the courses picked for you. Have a look and talk them through with ${first(r.mgr)}.`,{}));}
     D.reviews[c.id].uploads.push({t:D.now,by:pname(U.me),what:`Published: ${recs.length} people`,kind:"cycle"});logA(`${c.name} published (${recs.length} people)`);U.rv.cyc=c.id;U.view="review";toast(`${c.name} published. Managers and ${recs.length} employees emailed.`);return render()}
   if(a==="vendordel"){const v=D.vendors.find(x=>x.id===d.id);D.vendors=D.vendors.filter(x=>x!==v);logA("Vendor removed: "+v.name);U.drawer=null;toast("Removed.");return render()}
 
@@ -2151,6 +2170,11 @@ document.addEventListener("change",async e=>{
   if(d.sync){const [k,i]=d.sync.split("|");U.sync.diff[k][+i].on=t.checked;return}
   const S=D.settings;
   if(t.id==="reviewOn"){S.reviewOn=t.checked;toast(t.checked?"Talent Review is on.":"Talent Review is off. Growth keeps working without scores.");return render()}
+  if(t.id==="cyScope"){U.cyScope=t.value;return render()}
+  if(t.dataset&&t.dataset.cydept){U.cyDepts=[...document.querySelectorAll("input[data-cydept]:checked")].map(x=>x.dataset.cydept);return}
+  if(t.id==="cyQuiet"){U.cyQuiet=t.checked;return render()}
+  if(t.id==="shareScores"){D.settings.shareScores=t.checked;logA(`Own scores visible to employees: ${t.checked?"on":"off"}`);save();toast("Saved.");return render()}
+  if(t.id==="myRevCyc"){U.myrev=t.value;return render()}
   if(t.id==="rbGreen"||t.id==="rbAmber"){S.rb[t.id==="rbGreen"?"green":"amber"]=+t.value||0;if(S.rb.amber>=S.rb.green)S.rb.amber=S.rb.green-1;toast("Saved. Colour bands recalculated.");return render()}
   if(t.id==="gmButtons"){S.gmButtons=t.checked;toast(t.checked?"GMs now approve from the email directly. Nothing to record.":"GMs reply by email; you record the decision.");return render()}
   if(t.id==="headStep"){S.headStep=t.checked;toast("Saved. Applies to new requests.");return render()}
