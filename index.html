@@ -271,6 +271,7 @@ details.fold>div{padding:10px 14px}
 nav.side{max-height:calc(100vh - env(safe-area-inset-top,0px) - 86px);overflow-y:auto;overscroll-behavior:contain;padding-right:6px;scrollbar-width:thin}@media (max-width:980px){nav.side{max-height:none;overflow-y:auto}}
 #syncDot{width:8px;height:8px;border-radius:50%;background:transparent;margin-left:6px}#syncDot[data-on="1"]{background:#F2B74B;animation:pulse 1s infinite}@keyframes pulse{50%{opacity:.3}}
 #whoName{color:#fff;font-weight:600}
+#whoFind{min-width:260px;border-radius:999px;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;padding:7px 14px;font:inherit}#whoFind::placeholder{color:rgba(255,255,255,.7)}#whoFind:focus{background:#fff;color:var(--fg);outline:none}
 tr.click.on td{background:var(--accent-soft)}
 .chip.b-green{background:var(--ok-soft);color:var(--ok)}.chip.b-amber{background:var(--warn-soft);color:var(--warn)}.chip.b-red{background:var(--bad-soft);color:var(--bad)}
 .lvl.s-green i.f{background:var(--ok)}.lvl.s-amber i.f{background:var(--warn)}.lvl.s-red i.f{background:var(--bad)}
@@ -281,7 +282,7 @@ tr.click.on td{background:var(--accent-soft)}
   <div class="logo"><i>↗</i>Growth Hub <small>Tumodo Talent Development</small></div>
   <div id="wsBox"></div>
   <button class="srch" id="searchBtn" aria-label="Search people, courses and requests">⌕ <span>Search</span></button>
-  <div class="who"><label for="whoSel">Signed in as</label><select id="whoSel"></select><span id="whoName" hidden></span><span id="syncDot" aria-hidden="true"></span></div>
+  <div class="who"><label for="whoSel">Signed in as</label><select id="whoSel"></select><input id="whoFind" list="whoList" placeholder="View as… type a name" autocomplete="off" hidden><datalist id="whoList"></datalist><span id="whoName" hidden></span><span id="syncDot" aria-hidden="true"></span></div>
 </div></div>
 <div class="demo" id="prodBar" hidden><div class="wrap"><span></span><button class="btn sm" id="backToMe">Back to my own view</button></div></div>
 <div class="demo" id="demoBar"><div class="wrap">
@@ -1434,7 +1435,10 @@ function dPersonEdit(p){
     <div class="f2"><div class="field"><label for="pe_joined">Joined</label><input id="pe_joined" name="joined" type="date" value="${esc(p.joined||iso(D.now))}"></div>${sel("pe_tier",[["","From role requirement %"],"Standout","Top","Strong","Core","Underperforming"],p.tierOverride||"","Growth tier override",'name="tierOverride"')}</div>
     <div class="row"><button class="btn primary" type="submit">${p.id?"Save changes":"Add person"}</button>${p.id&&p.status==="active"?`<button class="btn bad" type="button" data-do="leaver" data-pid="${p.id}">Mark as left</button>`:""}${p.status==="left"?`<button class="btn" type="button" data-do="rehire" data-pid="${p.id}">Mark as returned</button>`:""}</div>
     ${p.id&&p.status==="active"&&U.leaver===p.id?leaverBox(p):""}
-  </form></section>`;
+  </form>${p.id&&p.status==="active"&&reportsOf(p.id).length?`<div class="head" style="margin-top:16px"><h3>Reports to ${esc(first(p.id))} (${reportsOf(p.id).length})</h3><span class="meta">when a role changes hands, move the team in one go</span></div>
+    <p class="sub" style="margin-bottom:8px">${reportsOf(p.id).map(r=>esc(r.name)).join(", ")}</p>
+    <div class="row"><select id="mvTo" aria-label="New manager" style="flex:1 1 220px"><option value="">Move all of them to…</option>${active().filter(x=>x.id!==p.id&&x.id!==TD).sort((a,b)=>a.name.localeCompare(b.name)).map(x=>`<option value="${x.id}">${esc(x.name)} · ${esc(x.title)}</option>`).join("")}</select><button class="btn" data-do="movereports" data-pid="${p.id}">Move team</button></div>
+    <p class="meta" style="margin-top:6px">Pending approvals waiting on ${esc(first(p.id))} move to the new manager too. To move one person only, open that person and change their manager.</p>`:""}</section>`;
 }
 function leaverBox(p){
   const reps=reportsOf(p.id), open=D.reqs.filter(r=>r.pid===p.id&&OPEN.concat(["approved","booked"]).includes(r.status)), held=D.reqs.filter(r=>r.status==="pending"&&r.chain[r.step].who===p.id);
@@ -1948,7 +1952,7 @@ function render(){
   document.getElementById("whoSel").innerHTML=D.depts.map(d=>{const g=active().filter(p=>p.dept===d.id);return g.length?`<optgroup label="${esc(d.name)}">${g.map(p=>`<option value="${p.id}" ${p.id===me?"selected":""}>${esc(p.name)} · ${esc(p.title)}</option>`).join("")}</optgroup>`:""}).join("");
   document.getElementById("quick").innerHTML=QUICK.map(([id,l])=>`<button data-who="${id}" aria-pressed="${id===me}">${l}</button>`).join("");
   document.getElementById("today").textContent=fmtD(D.now);
-  if(SP.mode==="prod"){const w=document.getElementById("whoName"), s=document.getElementById("whoSel"); const td=SP.realId===TD; s.hidden=!td; w.hidden=td; w.textContent=(person(SP.realId)||{}).name||SP.user?.name||""; const pb=document.getElementById("prodBar"); pb.hidden=!SP.readOnly; if(SP.readOnly) pb.querySelector("span").innerHTML=`Viewing as <b>${esc(pname(U.me))}</b> · read-only · recorded in the audit log`;}
+  if(SP.mode==="prod"){const w=document.getElementById("whoName"), s=document.getElementById("whoSel"); const td=SP.realId===TD; s.hidden=true; const f=document.getElementById("whoFind"); f.hidden=!td; w.hidden=td; if(td){const list=active().filter(p=>p.id!==TD).sort((a,b)=>a.name.localeCompare(b.name)); document.getElementById("whoList").innerHTML=list.map(p=>`<option value="${esc(p.name)} · ${esc(p.title)} · ${esc(dept(p.dept).name)}"></option>`).join(""); f.value=U.me===SP.realId?"":`${pname(U.me)} · ${person(U.me).title} · ${dept(person(U.me).dept).name}`;} w.textContent=(person(SP.realId)||{}).name||SP.user?.name||""; const pb=document.getElementById("prodBar"); pb.hidden=!SP.readOnly; if(SP.readOnly) pb.querySelector("span").innerHTML=`Viewing as <b>${esc(pname(U.me))}</b> · read-only · recorded in the audit log`;}
   document.getElementById("wsBox").innerHTML=canReview(me)?`<div class="ws" role="group" aria-label="Workspace"><button data-ws="growth" aria-pressed="${U.ws==="growth"}">Growth</button><button data-ws="review" aria-pressed="${U.ws==="review"}">Talent Review</button></div>`:"";
   document.getElementById("nav").innerHTML=nav.map(([g,its])=>`<div class="grp">${g?`<span>${esc(g)}</span>`:""}${its.map(([k,l,c])=>`<button data-nav="${k}" ${U.view===k?'aria-current="page"':""}>${esc(l)}${c?`<span class="badge">${c}</span>`:""}</button>`).join("")}</div>`).join("");
   const V={myreview:vMyReview,home:vHome,explore:vExplore,myreq:vMyReq,team:vTeam,teamreq:vTeamReq,overview:vOverview,allreq:vAllReq,people:vPeople,catalog:vCatalog,payments:vPayments,settings:vSettings,reports:vReports,outlook:vOutlook,review:vReview,uploads:vUploads,criteria:vCriteria,
@@ -2048,6 +2052,7 @@ function doAction(a,d){
   if(a==="book"){book(r);toast("Booked. Confirmation sent.");return render()}
   if(a==="gm_ok"||a==="gm_no"){const err=recordGM(r,a==="gm_ok"?"approve":"reject",val("n_"+r.id));if(err)return toast(err);toast(a==="gm_ok"?"GM approval recorded. Finance has been emailed.":"Recorded as not approved. The employee has been told.");return render()}
   if(a==="addperson"){U.drawer={type:"newperson",pre:{}};return render()}
+  if(a==="movereports"){const to=document.getElementById("mvTo")?.value;if(!to)return toast("Choose the new manager first.");const from=person(d.pid),np=person(to);const reps=reportsOf(from.id).filter(r=>r.id!==to);if(!reps.length)return toast("Nobody to move.");reps.forEach(r=>{r.mgr=to});let moved=0;D.reqs.filter(r=>r.status==="pending"&&r.chain[r.step].who===from.id&&r.chain[r.step].k==="mgr"&&reps.some(x=>x.id===r.pid)).forEach(r=>{r.chain[r.step].who=to;hist(r,pname(U.me),`Approval moved from ${from.name} to ${np.name} (team change)`);moved++});logA(`Team moved: ${reps.length} people from ${from.name} to ${np.name}${moved?`, ${moved} pending approval(s) reassigned`:""}`);save();toast(`${reps.length} people now report to ${np.name}.`);return render()}
   if(a==="leaver"){U.leaver=d.pid;return render()}
   if(a==="leavercancel"){U.leaver=null;return render()}
   if(a==="leaverok"){const p=person(d.pid);markLeft(p,val("lv_date")||iso(D.now),val("lv_mgr")||p.mgr||"ceo");U.leaver=null;U.drawer=null;toast(`${p.name} marked as left. Their team and approvals moved over.`);return render()}
@@ -2663,6 +2668,14 @@ document.addEventListener("change",async e=>{
   if(t.id==="rcRegion"){U.rc.region=t.value;U.rc.role=null;return render()}
   if(d.rcv){ const [i,w]=d.rcv.split("|"); const list=(D.criteria?.[rcKey()]||critForRole(U.rc.region,U.rc.role)||[]).map(x=>[...x]); list[+i][+w]=+t.value; rcSet(list); return render(); }
   if(t.id==="rcNew") U.rc.newSkill=t.value;
+});
+document.addEventListener("change",e=>{
+  const t=e.target; if(t.id!=="whoFind") return;
+  const v=t.value.trim(); if(!v){ if(U.me!==SP.realId) viewAs(SP.realId); return; }
+  const key=v.toLowerCase(); const hit=active().find(p=>p.id!==TD&&`${p.name} · ${p.title} · ${dept(p.dept).name}`.toLowerCase()===key)||active().find(p=>p.id!==TD&&p.name.toLowerCase()===key)||active().filter(p=>p.id!==TD&&p.name.toLowerCase().includes(key));
+  const p=Array.isArray(hit)?(hit.length===1?hit[0]:null):hit;
+  if(!p){ toast(Array.isArray(hit)&&hit.length>1?"Several people match: pick one from the list.":"No one by that name."); return; }
+  if(p.id===U.me) return; viewAs(p.id);
 });
 document.addEventListener("click",async e=>{
   const t=e.target.closest("button,tr[data-rcrole]"); if(!t) return; const d=t.dataset;
