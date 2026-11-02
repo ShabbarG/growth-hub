@@ -2656,7 +2656,7 @@ function viewAs(id){
   if(SP.mode!=="prod"){ signIn(id,U.ws); return; }
   if(U.me!==SP.realId&&id===SP.realId){ SP.readOnly=false; signIn(id,U.ws); SP.reload(); return; }
   if(SP.realId!==TD) return;
-  logA(`Viewed the Growth Hub as ${pname(id)} (read-only)`); save(); SP.flush().then(()=>{ SP.readOnly=true; signIn(id,U.ws); });
+  logA(`Viewed the Growth Hub as ${pname(id)} (read-only)`); save(); SP.flush().then(()=>{ SP.readOnly=true; signIn(id,canReview(id)?"review":"growth"); });
 }
 SP.reload=async function(){ try{ const Dn=await SP.loadAll(); D=Dn; if(SP.processDecisions()) save(); render(); }catch(e){ toast("Couldn't refresh: "+(e.message||e)) } };
 
@@ -2711,6 +2711,8 @@ async function boot(){
   const me=SP.personFor(SP.user.email);
   if(!me){ app.innerHTML=`<div class="pagehead"><div><h1>Welcome to the Growth Hub</h1><p class="sub">Your account (${esc(SP.user.email)}) isn't on the people list yet.</p></div></div>`+errBox(`Ask Talent Development (${D.settings.tdEmail}) to add you under People. It takes them a minute.`); return; }
   SP.realId=me.id; U=freshUI(me.id); U.view=homeView(me.id);
+  // land on Talent Review first: managers and leaders on the review report, employees on their own review when they have one
+  if(canReview(me.id)){ U.ws="review"; U.view="review"; } else if(D.settings.shareScores!==false&&typeof myReviewCycles==="function"&&myReviewCycles(me.id).length){ U.view="myreview"; }
   if(iso(D.lastDaily||0)!==iso(D.now)){ D.lastDaily=D.now; const m0=new Date(D.lastDigest||0).getMonth(); try{ dailyJob(); if(new Date(D.now).getMonth()!==m0&&D.lastDigest) sendDigests(); }catch(e){console.warn(e)} }
   if(SP.processDecisions()) save();
   render(); save(); SP.startPolling();
